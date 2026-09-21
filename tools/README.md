@@ -39,7 +39,11 @@ every project this folder is ported to.
 6. **Exit `0` on success.** Successfully finding lots of cruft is success. Non-zero
    exit only for a real error (bad path, unreadable output, crash).
 7. **Deterministic ordering.** Two runs over the same tree produce byte-identical
-   output, so reports diff cleanly.
+   output, so reports diff cleanly. Any wall-clock or random stamp in the output
+   must therefore be **opt-in and caller-supplied**, never a default — a
+   `new Date()` default silently makes every report differ on one line and defeats
+   the rule it appears to satisfy. Sort every comparison with code-unit `<` / `>`,
+   never a locale-sensitive one.
 8. **Robust against unparseable input.** A file a tool cannot read or parse is
    skipped and counted — never a crash. Never follow symlinks out of the repo.
 

@@ -18,6 +18,7 @@
  * Usage:
  *   node tools/duplicate-candidates/find-duplicate-candidates.mjs
  *   node tools/duplicate-candidates/find-duplicate-candidates.mjs --src src --report reports/duplicate-candidates.md
+ *   node tools/duplicate-candidates/find-duplicate-candidates.mjs --src src --generated "$(date -u +%FT%TZ)"
  *
  * Node >= 24, built-ins only. Exit 0 even when candidates are found
  * (finding candidates is success); non-zero only on a real error.
@@ -1275,7 +1276,12 @@ export function renderStdout(result, tiers, reportPath, opts = {}) {
 }
 
 export function renderMarkdown(result, tiers, opts = {}) {
-  const generated = opts.generated || new Date().toISOString();
+  // Provenance is OPT-IN (`opts.generated`, i.e. the `--generated` flag) so that
+  // two runs over the same tree are byte-identical by default (tools/README.md
+  // rule 7). A wall-clock default stamped every report with the current time,
+  // which made consecutive reports differ on one line and defeated the whole
+  // point: "reports diff cleanly".
+  const { generated } = opts;
   const displayBase = opts.displayBase || path.dirname(result.rootDir);
   const rel = (p) => {
     const r = path.relative(displayBase, p);
@@ -1310,7 +1316,7 @@ export function renderMarkdown(result, tiers, opts = {}) {
     out.push(`- Ubiquitous-name filter: **ON**, ${tiers.ignoreList.length} names (\`--no-ignore\` disables, \`--ignore a,b,c\` replaces)`);
     out.push(`- Ignored breakdown: ${shown.map(([n, c]) => `\`${n}\`: ${c}`).join(', ')}${more > 0 ? `, … +${more} more name(s)` : ''}`);
   }
-  out.push(`- Generated: ${generated}`);
+  if (generated) out.push(`- Generated: ${generated}`);
   out.push('');
   out.push('### Evidence pruning (early exits actually taken)');
   out.push('');
@@ -1431,6 +1437,10 @@ function parseArgs(argv) {
       opts.ignore = arg.slice('--ignore='.length);
     } else if (arg === '--no-ignore') {
       opts.noIgnore = true;
+    } else if (arg === '--generated') {
+      opts.generated = argv[++i];
+    } else if (arg.startsWith('--generated=')) {
+      opts.generated = arg.slice('--generated='.length);
     } else {
       throw new Error(`unknown argument: ${arg}`);
     }
@@ -1474,6 +1484,8 @@ function main() {
       '  --max N          max pairs printed per tier     (default: 60; the report always has all)',
       '  --ignore a,b,c   replace the default ubiquitous-name ignore list',
       '  --no-ignore      disable ubiquitous-name filtering entirely',
+      '  --generated VAL  stamp the report with VAL (a date, a git SHA, …);',
+      '                   omitted by default so two runs are byte-identical',
       '  -h, --help       show this help',
       '',
       'The ubiquitous-name filter only affects the default stdout listing: ignored',
@@ -1512,7 +1524,10 @@ function main() {
     fs.mkdirSync(path.dirname(reportPath), { recursive: true });
     fs.writeFileSync(
       reportPath,
-      renderMarkdown(result, tiers, { displayBase: path.dirname(srcRoot) }),
+      renderMarkdown(result, tiers, {
+        displayBase: path.dirname(srcRoot),
+        generated: args.generated,
+      }),
       'utf8',
     );
   } catch (err) {

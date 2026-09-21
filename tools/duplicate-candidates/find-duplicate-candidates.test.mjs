@@ -482,3 +482,54 @@ test('end-to-end: ubiquitous-name filter CLI (default, --no-ignore, --ignore)', 
     fs.rmSync(dir, { recursive: true, force: true });
   }
 });
+
+// ---------------------------------------------------------------------------
+// Determinism (tools/README.md rule 7: "Two runs over the same tree produce
+// byte-identical output, so reports diff cleanly.")
+// ---------------------------------------------------------------------------
+
+test('end-to-end: two runs over the same tree are byte-identical (no wall-clock stamp)', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'dupcand-det-'));
+  try {
+    const srcDir = path.join(dir, 'src');
+    fs.mkdirSync(srcDir);
+    fs.writeFileSync(
+      path.join(srcDir, 'a.ts'),
+      'export function sharedThing(value: number) { return value + 1; }\n',
+    );
+    fs.writeFileSync(
+      path.join(srcDir, 'b.ts'),
+      'export function sharedThing(value: number) { return value + 2; }\n',
+    );
+
+    // Deliberately a different report path each run: the report must not embed
+    // its own filename, and the only thing that may vary between runs is nothing.
+    const runReport = (name, extraArgs = []) => {
+      const report = path.join(dir, name);
+      const res = spawnSync(
+        process.execPath,
+        [TOOL, '--src', srcDir, '--report', report, ...extraArgs],
+        { cwd: dir, encoding: 'utf8' },
+      );
+      assert.equal(res.status, 0, `expected exit 0 for ${name}; stderr: ${res.stderr}`);
+      return fs.readFileSync(report, 'utf8');
+    };
+
+    const first = runReport('one.md');
+    const second = runReport('two.md');
+    assert.equal(second, first, 'two runs over the same tree must be byte-identical');
+    assert.ok(
+      !/^- Generated:/m.test(first),
+      'the report must carry no wall-clock stamp by default',
+    );
+
+    // Provenance is still available, but only when the caller supplies the value,
+    // so a stamped report is reproducible too.
+    const stamped = runReport('stamped.md', ['--generated', 'TEST-STAMP']);
+    assert.match(stamped, /^- Generated: TEST-STAMP$/m);
+    const stampedAgain = runReport('stamped2.md', ['--generated', 'TEST-STAMP']);
+    assert.equal(stampedAgain, stamped, 'an explicitly supplied stamp is reproducible');
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});

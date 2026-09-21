@@ -1,7 +1,7 @@
 # `duplicate-candidates` — name-based Type-4 clone discovery
 
 `npm run dup:candidates`
-`node tools/duplicate-candidates/find-duplicate-candidates.mjs [--src DIR] [--report FILE] [--max N] [--ignore a,b,c] [--no-ignore]`
+`node tools/duplicate-candidates/find-duplicate-candidates.mjs [--src DIR] [--report FILE] [--max N] [--ignore a,b,c] [--no-ignore] [--generated VALUE]`
 
 A dependency-free scanner that finds **function-like declarations sharing an
 exact, normalised or near-identical name across different files**, and emits them
@@ -103,7 +103,28 @@ e.g. `node tools/duplicate-candidates/find-duplicate-candidates.mjs --max 20000`
 
 The markdown report opens with the scan stats and a plain statement that these are
 candidates requiring human review. Ordering is stable — similarity desc, then
-name, then file/line — so two runs diff cleanly.
+name, then file/line — and the report is **byte-identical across runs over the same
+tree**, so two runs diff cleanly. See §Determinism below.
+
+### Determinism
+
+The scan itself is fully ordered: directory entries are sorted, function records are
+sorted by `file`/`line`/`name`, and every comparator uses code-unit (`<` / `>`)
+comparison rather than a locale-sensitive one. The report carries **no wall-clock
+timestamp by default**, so re-running over an unchanged tree produces a byte-identical
+file and a diff shows only real changes.
+
+Provenance is **opt-in**, and you supply the value — which keeps a stamped report
+reproducible too:
+
+```bash
+node tools/duplicate-candidates/find-duplicate-candidates.mjs \
+  --src src --generated "$(date -u +%FT%TZ)"
+```
+
+`--generated VALUE` adds one `- Generated: VALUE` line; omitted, nothing is stamped.
+This is rule 7 of `tools/README.md`. The default must stay deterministic, so never
+reintroduce a `new Date()` default.
 
 ### The `sim` hint
 
@@ -182,7 +203,7 @@ honest about over-reporting:
 - The tool calls itself a pointer, not a judge; the filter never turns it into a
   tool that quietly drops things.
 
-### The three CLI flags
+### The ubiquitous-name filter flags
 
 | Flag | Effect |
 | --- | --- |
@@ -191,7 +212,7 @@ honest about over-reporting:
 | `--no-ignore` | disable filtering entirely — reproduces the unfiltered tier counts exactly (`12313` tier-1 pairs here, vs `867` filtered) |
 
 `--no-ignore` is the proof that the list is a convenience, not a cover-up;
-`--help` lists every flag.
+`--help` lists every flag (including `--generated`).
 
 ---
 
