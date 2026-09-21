@@ -68,6 +68,11 @@ The `dup:candidates` script belongs to the *target* project, not here: the tool
 defaults to `<repo>/src`, so a script at this root would point at a `src/` that does
 not exist. This repo wires only `npm test`.
 
+**Toolbox is upstream.** Fixes and improvements land **here**, in the canonical copy;
+a consumer picks them up by copying the current `tools/` folder. Work in this repo
+never writes to a downstream project to sync a copy, so divergence between this copy
+and a consumer's copy is expected. The boundary is written down in `AGENTS.md`.
+
 ---
 
 ## The contract
