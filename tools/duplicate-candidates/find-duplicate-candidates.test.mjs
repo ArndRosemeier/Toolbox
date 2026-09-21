@@ -593,3 +593,78 @@ test('end-to-end: the two de-duplication strategies ship in stdout and in the re
     fs.rmSync(dir, { recursive: true, force: true });
   }
 });
+
+// ---------------------------------------------------------------------------
+// Completeness — the tool must place itself among the ESTABLISHED methods
+// ---------------------------------------------------------------------------
+
+test('docs: names the established clone-detection methods and the clone types', () => {
+  const tool = fs.readFileSync(path.join(HERE, 'find-duplicate-candidates.mjs'), 'utf8');
+  const readme = fs.readFileSync(path.join(HERE, 'README.md'), 'utf8');
+  const all = `${tool}\n${readme}`;
+
+  // The families a reader could actually reach for instead of this tool.
+  for (const method of [
+    'jscpd',
+    'PMD CPD',
+    'SonarQube',
+    'CCFinder',
+    'SourcererCC',
+    'NiCad',
+    'Deckard',
+    'sonarjs/no-identical-functions',
+  ]) {
+    assert.ok(all.includes(method), `the tool and its docs should name: ${method}`);
+  }
+  // The standard taxonomy, so "Type 4" is not an unexplained phrase.
+  for (const phrase of ['Type 1', 'Type 2', 'Type 3', 'Type 4']) {
+    assert.ok(readme.includes(phrase), `README should explain the clone taxonomy: ${phrase}`);
+  }
+  // And the honest positioning: it is an extension to those methods, not a detector.
+  assert.ok(readme.includes('not a Type-4 detector') || readme.includes('not a Type-4 detector.'));
+});
+
+test('portability: no source-project specifics in the tool, its docs or its output', () => {
+  // A tool that gets copied into other repos must never carry the script names,
+  // gate paths or directories of the project it happened to be written in. Two
+  // such leaks have already been found and fixed here; this is the regression guard.
+  const leaks = ['duplication:check', 'scripts/gate.sh', 'projects/Expert'];
+  const sources = {
+    'find-duplicate-candidates.mjs': fs.readFileSync(
+      path.join(HERE, 'find-duplicate-candidates.mjs'),
+      'utf8',
+    ),
+    'README.md': fs.readFileSync(path.join(HERE, 'README.md'), 'utf8'),
+  };
+
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'dupcand-port-'));
+  try {
+    const srcDir = path.join(dir, 'src');
+    fs.mkdirSync(srcDir);
+    fs.writeFileSync(
+      path.join(srcDir, 'a.ts'),
+      'export function sharedThing(value: number) { return value + 1; }\n',
+    );
+    fs.writeFileSync(
+      path.join(srcDir, 'b.ts'),
+      'export function sharedThing(value: number) { return value + 2; }\n',
+    );
+    const report = path.join(dir, 'out.md');
+    const res = spawnSync(
+      process.execPath,
+      [TOOL, '--src', srcDir, '--report', report],
+      { cwd: dir, encoding: 'utf8' },
+    );
+    assert.equal(res.status, 0, `expected exit 0; stderr: ${res.stderr}`);
+    sources['(generated stdout)'] = res.stdout;
+    sources['(generated report)'] = fs.readFileSync(report, 'utf8');
+
+    for (const [name, body] of Object.entries(sources)) {
+      for (const leak of leaks) {
+        assert.ok(!body.includes(leak), `${name} leaks a source-project specific string: ${leak}`);
+      }
+    }
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});

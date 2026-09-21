@@ -10,10 +10,12 @@
  *   different files and prints them as CANDIDATES for a human to review.
  *   It never claims two functions ARE duplicates.
  *
- * Why this exists next to jscpd: `npm run duplication:check` (jscpd) only finds
- * contiguous identical token runs, so it is structurally blind to two functions
- * that do the same job written differently. This tool closes the *discovery*
- * gap cheaply and accepts over-reporting; it must not silently miss things.
+ * Why this exists next to the established detectors: token-based tools (jscpd, PMD
+ * CPD, SonarQube) and AST-based tools (NiCad, Deckard,
+ * sonarjs/no-identical-functions) match STRUCTURE, so they are blind to a function
+ * that was rewritten under the same name — there is no identical token run and no
+ * isomorphic subtree. This tool matches NAMES instead and closes that *discovery*
+ * gap cheaply. It accepts over-reporting; it must not silently miss things.
  *
  * Usage:
  *   node tools/duplicate-candidates/find-duplicate-candidates.mjs
@@ -1281,6 +1283,8 @@ export function renderStdout(result, tiers, reportPath, opts = {}) {
   lines.push('These are CANDIDATES that require HUMAN REVIEW. A shared name or shape does');
   lines.push('NOT mean two functions are duplicates (two unrelated render() methods are fine).');
   lines.push('This tool over-reports on purpose: it must not silently miss anything.');
+  lines.push('Complements structural detectors (token: jscpd/CPD/SonarQube; AST: NiCad,');
+  lines.push('sonarjs/no-identical-functions), which miss a rewrite that kept its name.');
   lines.push('');
   lines.push(`Scan: ${result.filesScanned} files scanned, ${result.functions.length} function-like declarations found, ${result.skipped.length} skipped`);
   const filterState = tiers.ignoreList.length === 0
@@ -1348,8 +1352,13 @@ export function renderMarkdown(result, tiers, opts = {}) {
   out.push('> deliberately over-reports: it must not silently miss anything, so a');
   out.push('> quiet report is not proof that no Type-4 clones exist.');
   out.push('>');
-  out.push('> It complements `jscpd` (`npm run duplication:check`), which only finds');
-  out.push('> contiguous identical token runs.');
+  out.push('> **Where it sits.** Established detectors match *structure*: token-based');
+  out.push('> (`jscpd`, PMD CPD, SonarQube — the practical Type-1/2 tools), AST-based');
+  out.push('> (NiCad, Deckard, `sonarjs/no-identical-functions`), and graph- or ML-based');
+  out.push('> methods for semantic clones. This tool matches **names** instead, which is the');
+  out.push('> angle they miss: a function rewritten under its old name leaves no identical');
+  out.push('> token run and no isomorphic subtree, so the structural families report');
+  out.push('> nothing. It is a cheap heuristic for that case — not a Type-4 detector.');
   out.push('');
   out.push('## Scan stats');
   out.push('');

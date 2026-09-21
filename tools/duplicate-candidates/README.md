@@ -11,10 +11,10 @@ as a **candidate list for human review**. It is a pointer, not a judge.
 
 ## The problem it solves
 
-This project's existing duplication gate is `jscpd`
-(`npm run duplication:check`). `jscpd` finds **contiguous identical token runs**.
-That makes it structurally blind to two functions that do the same job written
-differently — a "Type-4 clone" in the standard clone taxonomy:
+The standard duplication gates are **token-based** (`jscpd`, PMD CPD, SonarQube and
+friends). They find **contiguous identical token runs**, which makes them precise and
+cheap — and structurally blind to two functions that do the same job written
+differently, a "Type-4 clone" in the standard clone taxonomy:
 
 ```ts
 // A.ts
@@ -34,6 +34,81 @@ are the same idea twice, and in a codebase with a long "vibe coding" history
 there are hundreds of these. `duplicate-candidates` closes the **discovery** gap
 cheaply: it cannot decide equivalence, but it can point a human at the places
 worth reading.
+
+---
+
+## The established methods — and where this tool fits
+
+Duplicate-code detection is a mature field with a standard vocabulary. Knowing the
+vocabulary is what makes this tool's niche precise: it is an **extension** to the
+established methods, aimed at the one angle they do not cover.
+
+### The clone taxonomy (Type 1–4)
+
+| Type | Also called | What it is |
+| --- | --- | --- |
+| **1** | exact | Identical fragments, except whitespace, comments and formatting. |
+| **2** | renamed / parameterised | Identical structure, but identifiers, literals or types were renamed. |
+| **3** | near-miss / gapped | Copies with statements added, removed or changed — still recognisably the same. |
+| **4** | semantic | Same *functionality*, different *implementation*. No shared token run, no shared syntax tree. |
+
+Each type up is harder to detect, and the cost rises sharply. Almost every tool that
+is practical in CI stops at Type 2 or 3.
+
+### The detection families
+
+| Family | How it matches | Representative tools | Reaches |
+| --- | --- | --- | --- |
+| **Text / line-based** | Normalised lines, then string matching | `diff`-based scripts, Duploc, Simian | Type 1 (Type 2 if normalised) |
+| **Token-based** | Lex to tokens, then suffix trees / hashing / Rabin–Karp / Smith–Waterman | **jscpd**, **PMD CPD**, **SonarQube / SonarCloud**, CCFinderX, iClones, SourcererCC | Types 1–2, some 3 |
+| **AST / tree-based** | Parse, then isomorphic subtrees or structural fingerprints | NiCad, Deckard, CloneDr, JetBrains DupFinder, **`eslint-plugin-sonarjs` → `no-identical-functions`** | Types 1–2, some 3 |
+| **Graph-based** | Program / control dependence graphs | Duplix and research prototypes | Types 3–4, but expensive and language-bound |
+| **Metric / fingerprint** | Per-function metric vectors, then clustering | various research and commercial tools | Type 3, heuristically |
+| **Learning / embedding-based** | Neural code embeddings, learned similarity | CodeBERT / GraphCodeBERT-based detectors, ASTNN | Type 4, research-grade and probabilistic |
+
+Practical reality for a JS/TS repo: the drop-in options are **jscpd** (token-based) and
+**`sonarjs/no-identical-functions`** (lint-integrated, flags identical function
+bodies). PMD CPD and SonarQube are equally established and worth it if you already run
+that stack. The graph- and ML-based routes are where Type 4 is genuinely attacked, but
+they are research-grade or need real infrastructure — not a one-line CI gate.
+
+### Where this tool fits
+
+Every family above matches **structure**: tokens, trees, graphs or vectors. This tool
+matches **names**. That is a different signal, and it is the gap it exists to fill:
+
+- A function that was **rewritten** but kept its name has no identical token run and
+  no isomorphic subtree, so the token- and AST-based families report nothing. The name
+  still says "these two are the same thing". This tool surfaces exactly those.
+- It also catches the "same name, drifted bodies" case — two services each growing
+  their own `addLogEntry`, similar enough to recognise, different enough that a token
+  detector comes back clean.
+- It is **not a Type-4 detector**. It is a cheap, explainable *heuristic* for Type-4
+  discovery, and it is blind to a duplicated body under two unrelated names
+  (`formatName` vs `buildDisplayName` — the example above). No cheap method catches
+  that; the expensive families only catch it statistically.
+
+So the two are complements, not competitors:
+
+| Clone type | Standard method | This tool |
+| --- | --- | --- |
+| 1 — exact | token / text based: definitive | lists same-name pairs, but that is not its purpose |
+| 2 — renamed | token / AST with normalisation | its **normalised** and **near** tiers match renamed *names*; body `sim` is a hint |
+| 3 — near-miss | AST (NiCad, Deckard), tolerant token matchers | not found by body — only if the names still match |
+| 4 — semantic, **same name** | effectively unreached by practical tools | **its angle** |
+| 4 — semantic, **different names** | graph / ML, research-grade | **not covered** — see §Known limitations |
+
+### What to run alongside it
+
+1. **A token-based detector for Types 1–2** — cheap, precise, and safe to gate in CI
+   (`jscpd`, PMD CPD, SonarQube). This is the baseline; run it first.
+2. **A lint-integrated identical-body check** — `eslint-plugin-sonarjs` →
+   `sonarjs/no-identical-functions`, if you want it on every commit rather than in a
+   separate job.
+3. **This tool for the name-based angle** — a reading list for the rewrites the above
+   cannot see. Do not make it a gate: it points, it does not judge.
+4. **Graph- or ML-based tooling only when the payoff justifies the setup** — the
+   honest route to renamed-body Type 4, and still probabilistic.
 
 ---
 

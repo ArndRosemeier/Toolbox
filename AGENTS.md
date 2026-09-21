@@ -48,5 +48,10 @@ rather than working around the boundary.
   caller-supplied**, never a default; comparisons use code-unit `<` / `>`, never
   locale-sensitive ordering. (This repo's first determinism bug — a `new Date()`
   default — is recorded in commit `be8eee0`.)
+- **Portable by contract — no source-project specifics.** A tool, its docs and its
+  output must never carry the script names, gate commands, absolute paths or
+  directory names of the project it happened to be written in (e.g.
+  `npm run duplication:check`, `bash scripts/gate.sh`, `projects/Expert`). A consumer
+  copies this folder into *their* repo. The `portability:` test guards this class.
 - **One logical change per commit.** Verify before claiming a pass: quote the test
   counts and exit codes actually observed, not the ones expected.
