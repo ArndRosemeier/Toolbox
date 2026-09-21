@@ -21,6 +21,7 @@
  *   node tools/duplicate-candidates/find-duplicate-candidates.mjs
  *   node tools/duplicate-candidates/find-duplicate-candidates.mjs --src src --report reports/duplicate-candidates.md
  *   node tools/duplicate-candidates/find-duplicate-candidates.mjs --src src --generated "$(date -u +%FT%TZ)"
+ *   node tools/duplicate-candidates/find-duplicate-candidates.mjs --src app --ext .js,.mjs
  *
  * Node >= 24, built-ins only. Exit 0 even when candidates are found
  * (finding candidates is success); non-zero only on a real error.
@@ -864,17 +865,60 @@ function findTopLevelAssign(tokens, from) {
 // ---------------------------------------------------------------------------
 
 const SKIP_DIR_PREFIXES = ['node_modules', 'dist'];
-const SKIP_FILE_SUFFIXES = ['.d.ts', '.test.ts', '.spec.ts'];
 
 /**
- * Walk `rootDir` for .ts files and extract functions. Never follows symlinks,
- * never throws on an individual file (it is counted as skipped instead).
+ * Source extensions the extractor understands. `--ext a,b,c` replaces this list.
+ *
+ * Deliberately EXCLUDES `.tsx` / `.jsx` / `.vue` / `.svelte`: those files interleave
+ * markup with code, and the tokenizer below does not understand markup blocks, so
+ * scanning them would report functions built from JSX/Vue noise — a silent lie in
+ * the other direction. They need a real extractor; see `tools/README.md`.
+ */
+export const DEFAULT_EXTENSIONS = ['.ts', '.js', '.mjs', '.cjs'];
+
+/** Normalise `--ext` values: trim, lowercase, and guarantee a leading dot. */
+export function normaliseExtensions(list) {
+  return list
+    .map((s) => String(s).trim().toLowerCase())
+    .filter(Boolean)
+    .map((s) => (s.startsWith('.') ? s : `.${s}`));
+}
+
+/**
+ * Resolve the extension list from parsed CLI args.
+ *   (no flag)          -> DEFAULT_EXTENSIONS
+ *   --ext ts,mjs,.js   -> exactly those (replaces the default, like --ignore)
+ */
+export function resolveExtensions(args = {}) {
+  if (args.ext === undefined) return DEFAULT_EXTENSIONS.slice();
+  return normaliseExtensions(String(args.ext).split(','));
+}
+
+/**
+ * File suffixes to skip in any supported language: declaration files, and
+ * tests/specs. Derived from the extension list so `--ext` stays coherent — add
+ * `.foo` and `*.test.foo` / `*.spec.foo` are skipped with it.
+ */
+export function skipSuffixesFor(extensions) {
+  const out = ['.d.ts'];
+  for (const ext of extensions) out.push(`.test${ext}`, `.spec${ext}`);
+  return out;
+}
+
+/**
+ * Walk `rootDir` for source files in the supported languages and extract
+ * functions. Never follows symlinks, never throws on an individual file (it is
+ * counted as skipped instead).
  *
  * @param {string} rootDir absolute path
- * @param {{displayBase?: string}} [opts]
+ * @param {{displayBase?: string, extensions?: string[]}} [opts]
  */
 export function scanTree(rootDir, opts = {}) {
   const displayBase = opts.displayBase || path.dirname(rootDir);
+  const extensions = opts.extensions && opts.extensions.length
+    ? opts.extensions
+    : DEFAULT_EXTENSIONS;
+  const skipSuffixes = skipSuffixesFor(extensions);
   const files = [];
   const skipped = [];
 
@@ -896,8 +940,8 @@ export function scanTree(rootDir, opts = {}) {
         continue;
       }
       if (!entry.isFile()) continue;
-      if (!entry.name.endsWith('.ts')) continue;
-      if (SKIP_FILE_SUFFIXES.some((s) => entry.name.endsWith(s))) continue;
+      if (!extensions.some((e) => entry.name.endsWith(e))) continue;
+      if (skipSuffixes.some((s) => entry.name.endsWith(s))) continue;
       files.push(full);
     }
   };
@@ -941,7 +985,7 @@ export function scanTree(rootDir, opts = {}) {
     return a.name < b.name ? -1 : a.name > b.name ? 1 : 0;
   });
 
-  return { rootDir, filesScanned: files.length, functions, skipped };
+  return { rootDir, filesScanned: files.length, extensions, functions, skipped };
 }
 
 // ---------------------------------------------------------------------------
@@ -1286,7 +1330,7 @@ export function renderStdout(result, tiers, reportPath, opts = {}) {
   lines.push('Complements structural detectors (token: jscpd/CPD/SonarQube; AST: NiCad,');
   lines.push('sonarjs/no-identical-functions), which miss a rewrite that kept its name.');
   lines.push('');
-  lines.push(`Scan: ${result.filesScanned} files scanned, ${result.functions.length} function-like declarations found, ${result.skipped.length} skipped`);
+  lines.push(`Scan: ${result.filesScanned} files scanned (${(result.extensions || DEFAULT_EXTENSIONS).join(', ')}), ${result.functions.length} function-like declarations found, ${result.skipped.length} skipped`);
   const filterState = tiers.ignoreList.length === 0
     ? 'ubiquitous-name filter OFF (--no-ignore)'
     : `ubiquitous-name filter ON (${tiers.ignoreList.length} names; --no-ignore disables)`;
@@ -1363,6 +1407,7 @@ export function renderMarkdown(result, tiers, opts = {}) {
   out.push('## Scan stats');
   out.push('');
   out.push(`- Source root: \`${rel(result.rootDir)}\``);
+  out.push(`- Extensions scanned: ${(result.extensions || DEFAULT_EXTENSIONS).map((e) => `\`${e}\``).join(', ')}`);
   out.push(`- Files scanned: **${result.filesScanned}**`);
   out.push(`- Function-like declarations found: **${result.functions.length}**`);
   out.push(`- Paths/files skipped (unreadable or unparseable): **${result.skipped.length}**`);
@@ -1521,6 +1566,10 @@ function parseArgs(argv) {
       opts.generated = argv[++i];
     } else if (arg.startsWith('--generated=')) {
       opts.generated = arg.slice('--generated='.length);
+    } else if (arg === '--ext') {
+      opts.ext = argv[++i];
+    } else if (arg.startsWith('--ext=')) {
+      opts.ext = arg.slice('--ext='.length);
     } else {
       throw new Error(`unknown argument: ${arg}`);
     }
@@ -1561,6 +1610,9 @@ function main() {
       'Options:',
       '  --src DIR        source root to scan            (default: <repo>/src)',
       '  --report FILE    markdown report path           (default: reports/duplicate-candidates.md)',
+      '  --ext a,b,c      scan these extensions          (default: .ts,.js,.mjs,.cjs)',
+      '                   replaces the default list; markup files (.tsx/.jsx/.vue/',
+      '                   .svelte) are deliberately NOT scanned — see tools/README.md',
       '  --max N          max pairs printed per tier     (default: 60; the report always has all)',
       '  --ignore a,b,c   replace the default ubiquitous-name ignore list',
       '  --no-ignore      disable ubiquitous-name filtering entirely',
@@ -1585,7 +1637,10 @@ function main() {
 
   let result;
   try {
-    result = scanTree(srcRoot, { displayBase: path.dirname(srcRoot) });
+    result = scanTree(srcRoot, {
+      displayBase: path.dirname(srcRoot),
+      extensions: resolveExtensions(args),
+    });
   } catch (err) {
     console.error(`error: scan failed: ${err && err.stack ? err.stack : err}`);
     process.exitCode = 1;

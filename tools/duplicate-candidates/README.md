@@ -1,7 +1,7 @@
 # `duplicate-candidates` — name-based Type-4 clone discovery
 
 `npm run dup:candidates`
-`node tools/duplicate-candidates/find-duplicate-candidates.mjs [--src DIR] [--report FILE] [--max N] [--ignore a,b,c] [--no-ignore] [--generated VALUE]`
+`node tools/duplicate-candidates/find-duplicate-candidates.mjs [--src DIR] [--report FILE] [--ext a,b,c] [--max N] [--ignore a,b,c] [--no-ignore] [--generated VALUE]`
 
 A dependency-free scanner that finds **function-like declarations sharing an
 exact, normalised or near-identical name across different files**, and emits them
@@ -114,11 +114,15 @@ So the two are complements, not competitors:
 
 ## How it works
 
-1. **Scan.** Walk the source root for `.ts` files. Skip `.d.ts`, `*.test.ts`,
-   `*.spec.ts`, `node_modules`, `dist*`, and every symlink (nothing outside the
-   repo is followed). Comments, strings, template literals and regex literals are
-   masked out **before** parsing, so text inside them can never create a fake
-   function. Brace depth bounds each body.
+1. **Scan.** Walk the source root for **`.ts`, `.js`, `.mjs` and `.cjs`** files
+   (`--ext a,b,c` replaces that list). Skip `*.d.ts` and the tests/specs of every
+   supported extension (`*.test.ts`, `*.spec.mjs`, …), plus `node_modules`, `dist*`
+   and every symlink (nothing outside the repo is followed). `.tsx`/`.jsx`/`.vue`/
+   `.svelte` are deliberately **not** scanned — the tokenizer does not understand
+   markup blocks, so it would report fabricated functions rather than miss them
+   silently. Comments, strings, template literals and regex literals are masked out
+   **before** parsing, so text inside them can never create a fake function. Brace
+   depth bounds each body.
 2. **Extract** every function-like declaration — `function foo`, `async function
    foo`, class and object-literal methods (with `public|private|protected|static|
    readonly` and optional return types), arrow/function expressions assigned to
@@ -304,8 +308,11 @@ honest about over-reporting:
 - **Heuristic parser.** Decorators or exotic syntax can defeat the brace/paren
   matcher. Such files are skipped and counted (the `skipped` number in the stats),
   never fatal — but check that count when it is non-zero.
-- **Only `.ts`.** `.tsx`/`.jsx`/`.vue`/`.svelte` are not scanned by default and
-  would need extractor changes.
+- **Languages.** `.ts`, `.js`, `.mjs` and `.cjs` are scanned — widen or narrow the
+  set with `--ext a,b,c`. **`.tsx`/`.jsx`/`.vue`/`.svelte` are not**, by design:
+  they interleave markup with code, the tokenizer does not understand markup blocks,
+  and a silent half-parse would be worse than a stated gap. Those need a real
+  extractor, or a pre-pass that pulls out the `<script>` block.
 - **The `sim` hint is coarse.** Shape Jaccard on token sets is deliberately cheap;
   two functions can share it while doing different things, and vice versa.
 

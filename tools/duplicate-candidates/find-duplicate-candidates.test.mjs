@@ -32,6 +32,10 @@ import {
   isUbiquitousPair,
   DEDUP_STRATEGIES,
   DEDUP_CAVEAT,
+  DEFAULT_EXTENSIONS,
+  resolveExtensions,
+  normaliseExtensions,
+  skipSuffixesFor,
 } from './find-duplicate-candidates.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
@@ -664,6 +668,90 @@ test('portability: no source-project specifics in the tool, its docs or its outp
         assert.ok(!body.includes(leak), `${name} leaks a source-project specific string: ${leak}`);
       }
     }
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// Source languages (extensions)
+// ---------------------------------------------------------------------------
+
+test('extensions: default set excludes markup, --ext replaces and normalises', () => {
+  assert.deepEqual(DEFAULT_EXTENSIONS, ['.ts', '.js', '.mjs', '.cjs']);
+  assert.deepEqual(resolveExtensions({}), ['.ts', '.js', '.mjs', '.cjs']);
+
+  // Markup-bearing extensions are deliberate gaps, never silent additions: the
+  // tokenizer cannot parse markup, so scanning them would report fabricated
+  // functions instead of admitting it did not understand the file.
+  for (const markup of ['.tsx', '.jsx', '.vue', '.svelte']) {
+    assert.ok(!DEFAULT_EXTENSIONS.includes(markup), `${markup} must not be scanned`);
+  }
+
+  // --ext REPLACES the default (like --ignore); bare names, case and spaces OK.
+  assert.deepEqual(resolveExtensions({ ext: 'ts,mjs' }), ['.ts', '.mjs']);
+  assert.deepEqual(resolveExtensions({ ext: ' .JS , Mjs ' }), ['.js', '.mjs']);
+  assert.deepEqual(normaliseExtensions(['ts', '.MJS', '']), ['.ts', '.mjs']);
+
+  // Skip suffixes follow the extension list, so --ext stays coherent.
+  assert.deepEqual(skipSuffixesFor(['.mjs']), ['.d.ts', '.test.mjs', '.spec.mjs']);
+  assert.ok(skipSuffixesFor(DEFAULT_EXTENSIONS).includes('.spec.cjs'));
+});
+
+test('end-to-end: scans .js/.mjs/.cjs, skips their tests/specs and all markup', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'dupcand-js-'));
+  try {
+    const srcDir = path.join(dir, 'src');
+    fs.mkdirSync(srcDir);
+    fs.writeFileSync(path.join(srcDir, 'a.mjs'), 'export function sharedThing(v) { return v + 1; }\n');
+    fs.writeFileSync(path.join(srcDir, 'b.js'), 'export function sharedThing(v) { return v + 2; }\n');
+    fs.writeFileSync(
+      path.join(srcDir, 'c.cjs'),
+      'function addLogEntry(x) { return x; }\nmodule.exports = { addLogEntry };\n',
+    );
+    fs.writeFileSync(path.join(srcDir, 'd.js'), 'function add_log_entry(x) { return x.trim(); }\n');
+    // Skipped: tests/specs in EVERY supported extension, not just .ts.
+    fs.writeFileSync(path.join(srcDir, 'a.test.mjs'), 'export function sharedThing(v) { return v; }\n');
+    fs.writeFileSync(path.join(srcDir, 'b.spec.js'), 'export function sharedThing(v) { return v; }\n');
+    // NOT scanned: markup needs a real extractor.
+    fs.writeFileSync(path.join(srcDir, 'view.jsx'), 'export function sharedThing() { return <div />; }\n');
+    fs.writeFileSync(path.join(srcDir, 'view.tsx'), 'export function sharedThing() { return <div />; }\n');
+
+    const report = path.join(dir, 'out.md');
+    const res = spawnSync(
+      process.execPath,
+      [TOOL, '--src', srcDir, '--report', report],
+      { cwd: dir, encoding: 'utf8' },
+    );
+    assert.equal(res.status, 0, `expected exit 0; stderr: ${res.stderr}`);
+
+    // Exactly the 4 supported sources: the .mjs/.js pair, the .cjs/.js pair, and
+    // nothing else — the two test files and the two markup files are excluded.
+    assert.match(res.stdout, /Scan: 4 files scanned/);
+    assert.ok(res.stdout.includes('sharedThing()'), 'tier-1 pair across .mjs and .js is missing');
+    assert.match(
+      res.stdout,
+      /addLogEntry \/ add_log_entry|add_log_entry \/ addLogEntry/,
+      'tier-2 pair across .cjs and .js is missing',
+    );
+    for (const excluded of ['a.test.mjs', 'b.spec.js', 'view.jsx', 'view.tsx']) {
+      assert.ok(!res.stdout.includes(excluded), `${excluded} must not be scanned`);
+    }
+
+    // The report records the languages actually scanned.
+    assert.match(
+      fs.readFileSync(report, 'utf8'),
+      /Extensions scanned: `\.ts`, `\.js`, `\.mjs`, `\.cjs`/,
+    );
+
+    // --ext REPLACES the set: only .mjs remains, and its test is still skipped.
+    const onlyMjs = spawnSync(
+      process.execPath,
+      [TOOL, '--src', srcDir, '--report', path.join(dir, 'mjs.md'), '--ext', '.mjs'],
+      { cwd: dir, encoding: 'utf8' },
+    );
+    assert.equal(onlyMjs.status, 0, `expected exit 0; stderr: ${onlyMjs.stderr}`);
+    assert.match(onlyMjs.stdout, /Scan: 1 files scanned/);
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });
   }
