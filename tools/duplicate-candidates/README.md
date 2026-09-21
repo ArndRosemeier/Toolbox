@@ -236,28 +236,67 @@ honest about over-reporting:
 
 ---
 
-## What to do with a candidate
+## HowTo — what to do with a candidate
 
-Do **not** treat the list as a work queue. Treat it as a reading list.
+Do **not** treat the list as a work queue. Treat it as a **reading list**: a candidate
+is a question, not a task. The same strategy is printed at the end of stdout and
+written into the generated report, so it travels with the candidate list.
 
-1. **Open both functions** (the report gives `file:line` for each). Read them side
-   by side, not just their signatures.
-2. **Compare intent, not text.** Ask: if one of these changes, must the other
-   change too? If yes, that is real duplication. If no, they are coincidentally
-   named twins and should be left alone.
-3. **Decide, explicitly:**
-   - **Extract** into one shared helper — when the intents genuinely coincide.
-   - **Differentiate** — rename one so their different jobs are obvious (this is
-     often the correct answer for same-named `render`/`init` methods).
-   - **Leave** — when the similarity is cosmetic.
-4. **Remember this is refactoring on a mature app.** Every extraction is a change
-   to working code with regression risk. Prefer small, individually verifiable
-   steps; run the project gate (`bash scripts/gate.sh`) after each; do not fold
-   "cleanups" into unrelated feature work.
-5. **Delete the candidate from the list only when it is resolved** (extracted,
-   renamed, or consciously accepted). A shrinking, hand-maintained list is more
-   useful than a huge auto-generated one nobody reads — but never delete a
-   candidate merely to make the numbers look better.
+**Step 0 — open both functions and compare intent.** The report gives `file:line` for
+each; read them side by side, not just their signatures. Ask: *if one changes, must
+the other change too?* If **no**, they are coincidentally-named twins or genuinely
+different jobs — leave them, or rename one so the difference is obvious (often the
+right call for same-named `render`/`init`). If **yes**, it is real duplication, and
+there are exactly **two ways** to resolve it.
+
+### Way 1 — literally the same thing ⇒ keep one, delete the other
+
+The two bodies do the *same job*: same inputs, same outputs, same edge cases. The
+answer is easy — **keep one and delete the other.**
+
+- Keep the **better** of the two (clearer, better named, fewer surprises), not
+  whichever you happened to open first.
+- Check **every call site** before deleting, including exported/public names that may
+  be used outside the files you can see; point them at the survivor.
+- Look for the **near-invisible differences** that mean it is *not* literally the
+  same: off-by-one bounds, `<` vs `<=`, null/undefined handling, a swallowed error, a
+  different default. Finding one does not block the merge — it moves you to Way 2.
+- Run the project's gate afterwards. Deletion is where a subtly-different caller
+  breaks.
+
+### Way 2 — big, almost-duplicate, one twist ⇒ add one parameter
+
+The two are **large and nearly identical**, differing in one respect. Do not maintain
+two copies that will drift: introduce **one parameter** that expresses the difference,
+and let the single function do both.
+
+- This pays off **because the body is big** — a large duplicated body is expensive to
+  keep in sync. A *short* almost-duplicate is usually cheaper left alone, or shared as
+  a tiny helper, than turned into something with an extra flag.
+- Give the parameter a **default that reproduces today's behaviour**, then migrate
+  call sites **one at a time**, so every intermediate state keeps working.
+- The parameter must express a variation of **one job**. If the "twist" really makes
+  the function do two different things, or you need several flags to cover the
+  variants, you have two functions wearing one name — keep them separate, or factor
+  out the part they genuinely share.
+- **Test both settings.** Parameterisation is exactly where behaviour quietly changes.
+
+### Or: leave it
+
+Not de-duplicating is a legitimate, recorded outcome — when the similarity is
+cosmetic, or the two really are different jobs that happen to share a name. What is
+never acceptable is merging or deleting a candidate merely to make the list shorter.
+
+### Working rules for the change itself
+
+- **This is refactoring on a mature app.** Every deletion and every parameterisation
+  is a change to working code with regression risk. Prefer small, individually
+  verifiable steps; **run the project's own gate** after each; do not fold "cleanups"
+  into unrelated feature work.
+- **Delete the candidate from the list only when it is resolved** (merged, renamed, or
+  consciously accepted). A shrinking, hand-maintained list is more useful than a huge
+  auto-generated one nobody reads — but never delete a candidate to make the numbers
+  look better.
 
 ---
 

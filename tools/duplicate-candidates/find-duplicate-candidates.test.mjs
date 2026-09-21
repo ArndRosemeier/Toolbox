@@ -30,6 +30,8 @@ import {
   resolveIgnoreList,
   toIgnoreSet,
   isUbiquitousPair,
+  DEDUP_STRATEGIES,
+  DEDUP_CAVEAT,
 } from './find-duplicate-candidates.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
@@ -529,6 +531,64 @@ test('end-to-end: two runs over the same tree are byte-identical (no wall-clock 
     assert.match(stamped, /^- Generated: TEST-STAMP$/m);
     const stampedAgain = runReport('stamped2.md', ['--generated', 'TEST-STAMP']);
     assert.equal(stampedAgain, stamped, 'an explicitly supplied stamp is reproducible');
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// The HowTo — the strategy for what to do with a candidate
+// ---------------------------------------------------------------------------
+
+test('end-to-end: the two de-duplication strategies ship in stdout and in the report', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'dupcand-howto-'));
+  try {
+    const srcDir = path.join(dir, 'src');
+    fs.mkdirSync(srcDir);
+    fs.writeFileSync(
+      path.join(srcDir, 'a.ts'),
+      'export function sharedThing(value: number) { return value + 1; }\n',
+    );
+    fs.writeFileSync(
+      path.join(srcDir, 'b.ts'),
+      'export function sharedThing(value: number) { return value + 2; }\n',
+    );
+
+    const report = path.join(dir, 'out.md');
+    const res = spawnSync(
+      process.execPath,
+      [TOOL, '--src', srcDir, '--report', report],
+      { cwd: dir, encoding: 'utf8' },
+    );
+    assert.equal(res.status, 0, `expected exit 0; stderr: ${res.stderr}`);
+    const markdown = fs.readFileSync(report, 'utf8');
+
+    // There are exactly TWO ways to de-duplicate — pin the count so a future edit
+    // has to be deliberate, not accidental.
+    assert.equal(DEDUP_STRATEGIES.length, 2, 'there are exactly two ways to de-duplicate');
+
+    // The HowTo must reach the human in BOTH outputs.
+    assert.match(res.stdout, /HowTo/);
+    assert.match(markdown, /## HowTo/);
+
+    // Every strategy is rendered from the one source of truth (DEDUP_STRATEGIES),
+    // which is what stops the stdout summary and the report from drifting apart.
+    for (const strategy of DEDUP_STRATEGIES) {
+      assert.ok(
+        res.stdout.includes(strategy.title),
+        `stdout is missing a strategy: ${strategy.title}`,
+      );
+      assert.ok(
+        markdown.includes(strategy.title),
+        `report is missing a strategy: ${strategy.title}`,
+      );
+    }
+
+    // The honest third answer travels too: not de-duplicating is legitimate.
+    assert.ok(
+      markdown.includes(DEDUP_CAVEAT),
+      'the report must state that leaving a candidate is a legitimate outcome',
+    );
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });
   }

@@ -1222,6 +1222,56 @@ export function ignoredSummaryLine(tiers, limit = 12) {
   return `Ignored as ubiquitous: ${tiers.ignoredTotal} pairs (${parts.join(', ')}${tail})`;
 }
 
+// ---------------------------------------------------------------------------
+// HowTo — what to do with a candidate
+//
+// The tool POINTS and never JUDGES (tools/README.md rule 4), but a candidate list
+// is only useful if the reader knows what to do with one. The strategy is stated
+// ONCE here and rendered into BOTH outputs, so the stdout summary and the report
+// cannot drift apart.
+// ---------------------------------------------------------------------------
+
+export const DEDUP_STRATEGIES = [
+  {
+    title: 'Literally the same thing? Keep one, delete the other',
+    detail:
+      'Same inputs, same outputs, same edge cases. Keep the better of the two '
+      + '(clearer, better named, fewer surprises), delete the other, and point every '
+      + 'caller at the survivor. Check the near-invisible differences BEFORE you '
+      + 'delete — off-by-one bounds, `<` vs `<=`, null/undefined handling, a swallowed '
+      + 'error, a different default. If you find one, the pair is not literally the '
+      + 'same; it is the next case.',
+  },
+  {
+    title: 'Big and nearly identical, differing by one twist? Add one parameter',
+    detail:
+      'Introduce a single parameter that expresses the difference, and let one '
+      + 'function do both. This pays off BECAUSE the body is big: a large duplicated '
+      + 'body is expensive to keep in sync and will drift. A short almost-duplicate is '
+      + 'usually cheaper left alone (or shared as a tiny helper) than turned into '
+      + 'something with an extra flag. Give the parameter a default that reproduces '
+      + "today's behaviour, then migrate call sites one at a time so every "
+      + 'intermediate state keeps working. The parameter must express a variation of '
+      + 'ONE job — if the "twist" is really a different job, or it takes several flags '
+      + 'to cover the variants, keep two functions instead.',
+  },
+];
+
+export const DEDUP_CAVEAT =
+  'Leaving a candidate alone is a legitimate, recorded outcome: if the similarity is '
+  + 'cosmetic, or they are genuinely different jobs that happen to share a name, leave '
+  + 'them — or rename one so the difference is obvious (often the right call for '
+  + 'same-named `render`/`init`). What is never acceptable is merging or deleting a '
+  + 'candidate merely to make the list shorter.';
+
+/** Compact form for the stdout quick-look: the two ways, then a pointer. */
+function howToStdoutLines() {
+  const lines = ['HowTo — what to do with a candidate (the tool points; you decide):'];
+  DEDUP_STRATEGIES.forEach((s, i) => lines.push(`  ${i + 1}. ${s.title}`));
+  lines.push('  Otherwise leave it (or rename one). Full HowTo is in the report.');
+  return lines;
+}
+
 export function renderStdout(result, tiers, reportPath, opts = {}) {
   const displayBase = opts.displayBase || path.dirname(result.rootDir);
   const relReport = path.relative(displayBase, reportPath);
@@ -1271,7 +1321,9 @@ export function renderStdout(result, tiers, reportPath, opts = {}) {
   }
   if (result.skipped.length > 0) {
     lines.push(`Skipped ${result.skipped.length} path(s)/file(s) that could not be read or parsed (see report).`);
+    lines.push('');
   }
+  lines.push(...howToStdoutLines());
   return lines.join('\n') + '\n';
 }
 
@@ -1367,6 +1419,25 @@ export function renderMarkdown(result, tiers, opts = {}) {
     }
     out.push('');
   }
+
+  out.push('## HowTo — what to do with a candidate');
+  out.push('');
+  out.push('A candidate is a **question**, not a task. Open both functions (the');
+  out.push('`file:line` above) and compare **intent**: if one changes, must the other');
+  out.push('change too? If not, they are coincidentally-named twins — leave them, or');
+  out.push('rename one. If yes, there are **two ways** to de-duplicate:');
+  out.push('');
+  DEDUP_STRATEGIES.forEach((s, i) => {
+    out.push(`${i + 1}. **${s.title}.**`);
+    out.push(`   ${s.detail}`);
+  });
+  out.push('');
+  out.push(DEDUP_CAVEAT);
+  out.push('');
+  out.push('After either change, run the project gate and confirm behaviour did not');
+  out.push('change — deletion and parameterisation are exactly where behaviour quietly');
+  out.push('changes.');
+  out.push('');
 
   if (tiers.ignoreList.length > 0) {
     out.push(`## Ignored candidates — ubiquitous names — ${tiers.ignoredTotal} pairs`);
