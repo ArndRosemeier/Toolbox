@@ -1,0 +1,20 @@
+{
+  "name": "toolbox",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Portable, dependency-free codebase analysis tools and shared knowledge, for reuse across projects.",
+  "type": "module",
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "test": "node --test \"tools/**/*.test.mjs\""
+  },
+  "keywords": [
+    "codebase-analysis",
+    "duplication",
+    "static-analysis",
+    "toolbox"
+  ],
+  "license": "ISC"
+}

@@ -1,0 +1,10 @@
+# Tool output — reports are regenerated on demand, never committed.
+# (Rule 3 of tools/README.md: tools write to reports/ or stdout.)
+/reports/
+
+# This toolbox is dependency-free by contract (rule 1). Guard against a stray install.
+/node_modules/
+
+# OS / editor noise
+.DS_Store
+*.swp
