@@ -22,6 +22,8 @@ tools/                          the portable toolbox — this is the unit you co
     README.md
     find-duplicate-candidates.mjs
     find-duplicate-candidates.test.mjs
+docs/
+  WAY-OF-WORKING.md             how code gets written here (Part 1 portable, Part 2 DSH)
 ```
 
 `tools/` is kept as a single self-contained folder on purpose: the whole folder is
@@ -29,8 +31,15 @@ copied into a target project's root, so every tool keeps resolving paths as
 `<repo>/tools/...` (the duplicate finder's `REPO_ROOT` is two levels up from its own
 file). Copy the folder; do not copy individual files.
 
-Shared knowledge — cross-project notes and decisions that are worth carrying between
-projects — lives here at the root and in `docs/` as it accumulates.
+---
+
+## Shared knowledge
+
+Cross-project notes and decisions worth carrying between projects live in `docs/`.
+
+| Doc | What it covers |
+| --- | --- |
+| [`docs/WAY-OF-WORKING.md`](docs/WAY-OF-WORKING.md) | How code gets written in these projects. **Part 1** — the portable strategy: roles, the loop, the durable artifacts, verification doctrine, the brief. **Part 2** — the concrete DeepSeek Harness mechanics: the clock and the gate, worktrees, subagent and host hygiene. |
 
 ---
 
