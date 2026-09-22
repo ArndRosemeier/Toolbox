@@ -677,15 +677,21 @@ test('portability: no source-project specifics in the tool, its docs or its outp
 // Source languages (extensions)
 // ---------------------------------------------------------------------------
 
-test('extensions: default set excludes markup, --ext replaces and normalises', () => {
-  assert.deepEqual(DEFAULT_EXTENSIONS, ['.ts', '.js', '.mjs', '.cjs']);
-  assert.deepEqual(resolveExtensions({}), ['.ts', '.js', '.mjs', '.cjs']);
+test('extensions: default set covers JS/TS/JSX/TSX; --ext replaces and normalises', () => {
+  assert.deepEqual(DEFAULT_EXTENSIONS, [
+    '.ts', '.tsx', '.mts', '.cts', '.js', '.jsx', '.mjs', '.cjs',
+  ]);
+  assert.deepEqual(resolveExtensions({}), DEFAULT_EXTENSIONS);
 
-  // Markup-bearing extensions are deliberate gaps, never silent additions: the
-  // tokenizer cannot parse markup, so scanning them would report fabricated
-  // functions instead of admitting it did not understand the file.
-  for (const markup of ['.tsx', '.jsx', '.vue', '.svelte']) {
-    assert.ok(!DEFAULT_EXTENSIONS.includes(markup), `${markup} must not be scanned`);
+  // JSX/TSX are IN: excluding them silently missed every component in a React
+  // codebase, which is the exact failure this tool exists to prevent. Vue/Svelte
+  // are OUT: single-file components where markup dominates and a <script> block
+  // may be absent, so the tokenizer would ingest the template as code.
+  for (const included of ['.tsx', '.jsx']) {
+    assert.ok(DEFAULT_EXTENSIONS.includes(included), `${included} must be scanned`);
+  }
+  for (const excluded of ['.vue', '.svelte']) {
+    assert.ok(!DEFAULT_EXTENSIONS.includes(excluded), `${excluded} must not be scanned`);
   }
 
   // --ext REPLACES the default (like --ignore); bare names, case and spaces OK.
@@ -696,9 +702,44 @@ test('extensions: default set excludes markup, --ext replaces and normalises', (
   // Skip suffixes follow the extension list, so --ext stays coherent.
   assert.deepEqual(skipSuffixesFor(['.mjs']), ['.d.ts', '.test.mjs', '.spec.mjs']);
   assert.ok(skipSuffixesFor(DEFAULT_EXTENSIONS).includes('.spec.cjs'));
+  assert.ok(skipSuffixesFor(DEFAULT_EXTENSIONS).includes('.test.tsx'));
 });
 
-test('end-to-end: scans .js/.mjs/.cjs, skips their tests/specs and all markup', () => {
+test('extractor: collects object-property and class-field functions, skips type signatures', () => {
+  const names = (src) => extractFunctions(src).map((f) => `${f.name}:${f.kind}`);
+
+  // Object-literal properties. `load()` (shorthand method) is caught by the
+  // method rule; the two property forms had no declaration keyword and were
+  // invisible before.
+  assert.deepEqual(
+    names('const o = { workerCount: () => 4, onDone: function () { return 1; }, async load() { return 2; } };'),
+    ['workerCount:property-arrow', 'onDone:property-function-expression', 'load:method'],
+  );
+  // Class fields: an arrow assigned to a property, and a plain non-function field.
+  assert.deepEqual(
+    names('class C { handleClick = () => { this.x = 1; }; count = 0; }'),
+    ['handleClick:property-arrow'],
+  );
+  // async property arrow keeps its async marker.
+  assert.deepEqual(
+    names('const o = { fetchIt: async () => 1 };'),
+    ['fetchIt:property-async-arrow'],
+  );
+  // A type signature is NOT a function…
+  assert.deepEqual(names('interface P { onDone: () => void; onErr: () => string }'), []);
+  // …but a real arrow that merely STARTS with `void` is still collected.
+  assert.deepEqual(names('const o = { f: () => void doThing() };'), ['f:property-arrow']);
+  // Named function expressions were missed before the shared reader was added.
+  // They are deliberately reported TWICE — once under the binding (`f`, the name
+  // callers actually use) and once under the inner name (`named`), which the
+  // function-keyword rule sees. Over-reporting is the contract; missing is not.
+  assert.deepEqual(
+    names('const f = function named() { return 1; };'),
+    ['f:function-expression', 'named:function'],
+  );
+});
+
+test('end-to-end: scans .js/.mjs/.cjs, skips their tests/specs and Vue/Svelte', () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'dupcand-js-'));
   try {
     const srcDir = path.join(dir, 'src');
@@ -713,9 +754,9 @@ test('end-to-end: scans .js/.mjs/.cjs, skips their tests/specs and all markup', 
     // Skipped: tests/specs in EVERY supported extension, not just .ts.
     fs.writeFileSync(path.join(srcDir, 'a.test.mjs'), 'export function sharedThing(v) { return v; }\n');
     fs.writeFileSync(path.join(srcDir, 'b.spec.js'), 'export function sharedThing(v) { return v; }\n');
-    // NOT scanned: markup needs a real extractor.
-    fs.writeFileSync(path.join(srcDir, 'view.jsx'), 'export function sharedThing() { return <div />; }\n');
-    fs.writeFileSync(path.join(srcDir, 'view.tsx'), 'export function sharedThing() { return <div />; }\n');
+    // NOT scanned: single-file components where markup dominates.
+    fs.writeFileSync(path.join(srcDir, 'view.vue'), '<template><div>hi</div></template>\n');
+    fs.writeFileSync(path.join(srcDir, 'view.svelte'), '<div>hi</div>\n');
 
     const report = path.join(dir, 'out.md');
     const res = spawnSync(
@@ -725,8 +766,8 @@ test('end-to-end: scans .js/.mjs/.cjs, skips their tests/specs and all markup', 
     );
     assert.equal(res.status, 0, `expected exit 0; stderr: ${res.stderr}`);
 
-    // Exactly the 4 supported sources: the .mjs/.js pair, the .cjs/.js pair, and
-    // nothing else — the two test files and the two markup files are excluded.
+    // Exactly the 4 supported sources: the two test files and the two
+    // single-file-component files are excluded.
     assert.match(res.stdout, /Scan: 4 files scanned/);
     assert.ok(res.stdout.includes('sharedThing()'), 'tier-1 pair across .mjs and .js is missing');
     assert.match(
@@ -734,14 +775,14 @@ test('end-to-end: scans .js/.mjs/.cjs, skips their tests/specs and all markup', 
       /addLogEntry \/ add_log_entry|add_log_entry \/ addLogEntry/,
       'tier-2 pair across .cjs and .js is missing',
     );
-    for (const excluded of ['a.test.mjs', 'b.spec.js', 'view.jsx', 'view.tsx']) {
+    for (const excluded of ['a.test.mjs', 'b.spec.js', 'view.vue', 'view.svelte']) {
       assert.ok(!res.stdout.includes(excluded), `${excluded} must not be scanned`);
     }
 
     // The report records the languages actually scanned.
     assert.match(
       fs.readFileSync(report, 'utf8'),
-      /Extensions scanned: `\.ts`, `\.js`, `\.mjs`, `\.cjs`/,
+      /Extensions scanned: `\.ts`, `\.tsx`, `\.mts`, `\.cts`, `\.js`, `\.jsx`, `\.mjs`, `\.cjs`/,
     );
 
     // --ext REPLACES the set: only .mjs remains, and its test is still skipped.
@@ -752,6 +793,64 @@ test('end-to-end: scans .js/.mjs/.cjs, skips their tests/specs and all markup', 
     );
     assert.equal(onlyMjs.status, 0, `expected exit 0; stderr: ${onlyMjs.stderr}`);
     assert.match(onlyMjs.stdout, /Scan: 1 files scanned/);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('end-to-end: scans .tsx/.jsx, collects property arrows, invents nothing from JSX', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'dupcand-tsx-'));
+  try {
+    const srcDir = path.join(dir, 'src');
+    fs.mkdirSync(srcDir);
+    // A component name AND an object-property arrow shared across two files — the
+    // property arrow was invisible to the extractor before, and .tsx was not
+    // scanned at all, so a whole cycle of real duplication stayed off the list.
+    fs.writeFileSync(
+      path.join(srcDir, 'a.tsx'),
+      [
+        'const config = { workerCount: () => 4, onDone: function () { return 1; } };',
+        'interface Props { label: string; onCancel: () => void }',
+        'export function Field({ label }: Props) {',
+        '  return <label className="f">{label}</label>;',
+        '}',
+        '',
+      ].join('\n'),
+    );
+    fs.writeFileSync(
+      path.join(srcDir, 'b.jsx'),
+      [
+        'const settings = { workerCount: () => 8 };',
+        'export function Field({ label }) {',
+        '  return <label>{label}</label>;',
+        '}',
+        '',
+      ].join('\n'),
+    );
+    // JSX prose containing parentheses followed by an expression container: it must
+    // never be mistaken for a method, even when it starts its own line.
+    fs.writeFileSync(
+      path.join(srcDir, 'c.tsx'),
+      'export function Notes({ n }) {\n  return <p>\n    Save (now) {n}\n  </p>;\n}\n',
+    );
+
+    const report = path.join(dir, 'out.md');
+    const res = spawnSync(
+      process.execPath,
+      [TOOL, '--src', srcDir, '--report', report],
+      { cwd: dir, encoding: 'utf8' },
+    );
+    assert.equal(res.status, 0, `expected exit 0; stderr: ${res.stderr}`);
+
+    assert.match(res.stdout, /Scan: 3 files scanned/);
+    // The component is found across .tsx and .jsx.
+    assert.ok(res.stdout.includes('Field()'), 'Field pair across .tsx/.jsx is missing');
+    // The object-property arrow is now collected and pairs across files.
+    assert.ok(res.stdout.includes('workerCount()'), 'object-property arrow was not collected');
+    // JSX text is prose, not a function.
+    assert.ok(!res.stdout.includes('Save'), 'JSX prose fabricated a function named Save');
+    // An interface signature `onCancel: () => void` is a type, not a function.
+    assert.ok(!res.stdout.includes('onCancel'), 'a type signature was collected as a function');
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });
   }

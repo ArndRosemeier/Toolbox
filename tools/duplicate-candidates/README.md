@@ -114,21 +114,26 @@ So the two are complements, not competitors:
 
 ## How it works
 
-1. **Scan.** Walk the source root for **`.ts`, `.js`, `.mjs` and `.cjs`** files
-   (`--ext a,b,c` replaces that list). Skip `*.d.ts` and the tests/specs of every
-   supported extension (`*.test.ts`, `*.spec.mjs`, …), plus `node_modules`, `dist*`
-   and every symlink (nothing outside the repo is followed). `.tsx`/`.jsx`/`.vue`/
-   `.svelte` are deliberately **not** scanned — the tokenizer does not understand
-   markup blocks, so it would report fabricated functions rather than miss them
-   silently. Comments, strings, template literals and regex literals are masked out
-   **before** parsing, so text inside them can never create a fake function. Brace
-   depth bounds each body.
+1. **Scan.** Walk the source root for **`.ts`, `.tsx`, `.mts`, `.cts`, `.js`,
+   `.jsx`, `.mjs` and `.cjs`** files (`--ext a,b,c` replaces that list). Skip
+   `*.d.ts` and the tests/specs of every supported extension (`*.test.tsx`,
+   `*.spec.mjs`, …), plus `node_modules`, `dist*` and every symlink (nothing outside
+   the repo is followed). Comments, strings, template literals and regex literals are
+   masked out **before** parsing, so text inside them can never create a fake
+   function. Brace depth bounds each body.
+   **`.vue`/`.svelte` are not scanned** — single-file components where markup
+   dominates and the `<script>` block may be absent, so the tokenizer would ingest
+   the template as code; those need a real extractor. JSX/TSX **are** scanned:
+   measured on a realistic component file, declarations are extracted correctly and
+   JSX prose does not fabricate functions (the `>` closing a tag is an expression
+   continuation, so a word after a tag is never treated as a member name).
 2. **Extract** every function-like declaration — `function foo`, `async function
    foo`, class and object-literal methods (with `public|private|protected|static|
    readonly` and optional return types), arrow/function expressions assigned to
-   `const`/`let`, and getters/setters — recording name, file, 1-based start line,
-   body token count and a body **shape** (token sequence with every identifier
-   replaced by `ID`, numbers by `NUM`).
+   `const`/`let`/`var`, **object properties and class fields**
+   (`{ workerCount: () => … }`, `handleClick = () => …`), and getters/setters —
+   recording name, file, 1-based start line, body token count and a body **shape**
+   (token sequence with every identifier replaced by `ID`, numbers by `NUM`).
 3. **Group into three tiers**, each pair appearing in exactly one tier — the
    strongest that applies — across *different* files:
    - **Tier 1 — exact name match.** `addLogEntry` / `addLogEntry`.
@@ -308,11 +313,15 @@ honest about over-reporting:
 - **Heuristic parser.** Decorators or exotic syntax can defeat the brace/paren
   matcher. Such files are skipped and counted (the `skipped` number in the stats),
   never fatal — but check that count when it is non-zero.
-- **Languages.** `.ts`, `.js`, `.mjs` and `.cjs` are scanned — widen or narrow the
-  set with `--ext a,b,c`. **`.tsx`/`.jsx`/`.vue`/`.svelte` are not**, by design:
-  they interleave markup with code, the tokenizer does not understand markup blocks,
-  and a silent half-parse would be worse than a stated gap. Those need a real
-  extractor, or a pre-pass that pulls out the `<script>` block.
+- **Languages.** `.ts`, `.tsx`, `.mts`, `.cts`, `.js`, `.jsx`, `.mjs` and `.cjs` are
+  scanned — widen or narrow the set with `--ext a,b,c`. **`.vue` and `.svelte` are
+  not**: they are single-file components where markup dominates and the `<script>`
+  block may be absent, so the tokenizer would ingest the template as code. Those need
+  a real extractor, or a pre-pass that pulls out the `<script>` block.
+- **Type signatures can look like functions.** A prop type such as
+  `{ onDone: () => void }` is skipped — a lone primitive type word is never a valid
+  value — but a longer one like `{ onDone: () => Promise<void> }` is collected as a
+  tiny candidate. That is over-report, not a miss; confirm before acting.
 - **The `sim` hint is coarse.** Shape Jaccard on token sets is deliberately cheap;
   two functions can share it while doing different things, and vice versa.
 

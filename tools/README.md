@@ -120,13 +120,15 @@ repo without reading this project's history first.
 - **Generated, vendored and minified files.** The walker skips `node_modules` and
   any `dist*` directory, but it cannot know that `src/generated/schema.ts` is
   machine-written. Exclude those roots or expect inflated counts.
-- **Source languages.** The scanner takes `.ts`, `.js`, `.mjs` and `.cjs` by default
-  (`--ext a,b,c` replaces the list), skips `*.d.ts` and the tests/specs of each
-  supported extension, and does **not** scan `.tsx`/`.jsx`/`.vue`/`.svelte`: those
-  interleave markup with code, and the tokenizer would mis-parse them. For
-  JSX/Vue/Svelte you need a real extractor (or a pre-pass that pulls out the
-  `<script>` block) before this tool is meaningful. The extractor itself is
-  syntax-agnostic across JS and TS — the extension list is the only language switch.
+- **Source languages.** The scanner takes `.ts`, `.tsx`, `.mts`, `.cts`, `.js`,
+  `.jsx`, `.mjs` and `.cjs` by default (`--ext a,b,c` replaces the list), skips
+  `*.d.ts` and the tests/specs of each supported extension, and does **not** scan
+  `.vue`/`.svelte` — single-file components where markup dominates and the
+  `<script>` block may be absent, so the tokenizer would ingest the template. Those
+  need a real extractor (or a pre-pass that pulls out the `<script>` block) before
+  this tool is meaningful. JSX/TSX *are* supported: the tokenizer extracts component
+  bodies correctly and does not treat tag prose as code, so excluding them silently
+  missed every component in a React codebase.
 - **Decorators and exotic syntax.** The brace/paren matching is heuristic. A file
   that defeats it is skipped and counted, never fatal, but a heavily decorated
   codebase may lose a few functions. Check the skipped count in the stats line.

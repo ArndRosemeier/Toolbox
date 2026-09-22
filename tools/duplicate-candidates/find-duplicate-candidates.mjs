@@ -568,6 +568,19 @@ const EXPR_CONTINUATIONS = new Set([
   'instanceof',
 ]);
 
+/**
+ * Lowercase primitive type words. A bare `() => void` (or `: string`) is a TYPE
+ * SIGNATURE, not a function: none of these is a valid standalone value expression
+ * in JS/TS (the globals are capitalised — `String`, `Number`, …), so skipping such
+ * a body cannot hide a real function. This matters for `.tsx`, where prop types like
+ * `{ onDone: () => void }` are everywhere. A body of two or more tokens is NOT
+ * skipped, so a real `() => void doSomething()` is still collected.
+ */
+const BARE_TYPE_WORDS = new Set([
+  'void', 'string', 'number', 'boolean', 'any', 'unknown', 'never', 'object',
+  'symbol', 'bigint',
+]);
+
 const BLOCK_STARTERS = new Set([
   'const', 'let', 'var', 'return', 'if', 'for', 'while', 'function', 'class',
   'export', 'import', 'switch', 'try', 'throw', 'do', 'else', 'interface',
@@ -716,6 +729,82 @@ function bodySlice(tokens, braceStart) {
 }
 
 /**
+ * Read a function/arrow VALUE beginning at `from` (just after an `=` or `:`).
+ * Handles `function [name]() {}`, `async function () {}`, `() => …`, `x => …`,
+ * `async () => …` and generic `<T>(…) => …`. Returns null when the value is not a
+ * function, so callers can apply it to any assignment or property without guessing.
+ *
+ * Shared by the `const/let/var` branch and the object-property / class-field
+ * branch so the two cannot drift apart.
+ *
+ * @returns {{kind: string, body: object[]}|null}
+ */
+function readFunctionValue(tokens, from) {
+  let r = from;
+  let prefix = '';
+  if (tokens[r] && tokens[r].v === 'async') {
+    prefix = 'async-';
+    r += 1;
+  }
+
+  if (tokens[r] && tokens[r].v === 'function') {
+    let k = r + 1;
+    if (tokens[k] && tokens[k].v === '*') k += 1;
+    // optional function-expression name: `= function named() {}`
+    if (tokens[k] && tokens[k].kind === 'id' && tokens[k + 1] && tokens[k + 1].v === '(') {
+      k += 1;
+    }
+    if (tokens[k] && tokens[k].v === '(') {
+      const close = findMatch(tokens, k);
+      if (close > 0) {
+        const body = bodySlice(tokens, findBodyBlock(tokens, close + 1));
+        if (body) return { kind: 'function-expression', body };
+      }
+    }
+    return null;
+  }
+
+  // `x => …` — the single parameter IS the arrow.
+  if (
+    tokens[r] && tokens[r].kind === 'id' && !NOT_NAMES.has(tokens[r].v)
+    && tokens[r + 1] && tokens[r + 1].v === '='
+    && tokens[r + 2] && tokens[r + 2].v === '>'
+  ) {
+    const bodyStart = r + 3;
+    const body = tokens[bodyStart] && tokens[bodyStart].v === '{'
+      ? bodySlice(tokens, bodyStart)
+      : tokens.slice(bodyStart, findExpressionBodyEnd(tokens, bodyStart));
+    return body ? { kind: `${prefix}arrow`, body } : null;
+  }
+
+  let paramsClose = -1;
+  if (tokens[r] && tokens[r].v === '(') {
+    paramsClose = findMatch(tokens, r);
+  } else if (tokens[r] && tokens[r].v === '<') {
+    const m = findAngleMatch(tokens, r);
+    if (m > 0 && tokens[m + 1] && tokens[m + 1].v === '(') {
+      paramsClose = findMatch(tokens, m + 1);
+    }
+  }
+  if (paramsClose > 0) {
+    const arrow = findArrow(tokens, paramsClose + 1);
+    if (arrow > 0) {
+      const bodyStart = arrow + 2;
+      const body = tokens[bodyStart] && tokens[bodyStart].v === '{'
+        ? bodySlice(tokens, bodyStart)
+        : tokens.slice(bodyStart, findExpressionBodyEnd(tokens, bodyStart));
+      if (body) return { kind: `${prefix}arrow`, body };
+    }
+  }
+  return null;
+}
+
+/** True when a body is a lone primitive type word — a signature, not a function. */
+function isBareTypeSignature(body) {
+  return body.length === 1 && BARE_TYPE_WORDS.has(body[0].v);
+}
+
+/**
  * Extract every function-like declaration from a source string.
  *
  * @param {string} source
@@ -760,62 +849,28 @@ export function extractFunctions(source) {
       if (nameTok && nameTok.kind === 'id' && !NOT_NAMES.has(nameTok.v)) {
         const eq = findTopLevelAssign(tokens, i + 2);
         if (eq > 0) {
-          let r = eq + 1;
-          let asyncArrow = false;
-          if (tokens[r] && tokens[r].v === 'async') {
-            asyncArrow = true;
-            r += 1;
-          }
-          if (tokens[r] && tokens[r].v === 'function') {
-            let k = r + 1;
-            if (tokens[k] && tokens[k].v === '*') k += 1;
-            if (tokens[k] && tokens[k].v === '(') {
-              const close = findMatch(tokens, k);
-              if (close > 0) {
-                const body = bodySlice(tokens, findBodyBlock(tokens, close + 1));
-                push(nameTok.v, nameTok.line, 'function-expression', body);
-              }
-            }
-          } else {
-            let paramsClose = -1;
-            if (tokens[r] && tokens[r].v === '(') {
-              paramsClose = findMatch(tokens, r);
-            } else if (
-              tokens[r] &&
-              tokens[r].kind === 'id' &&
-              !NOT_NAMES.has(tokens[r].v) &&
-              tokens[r + 1] &&
-              tokens[r + 1].v === '=' &&
-              tokens[r + 2] &&
-              tokens[r + 2].v === '>'
-            ) {
-              // `x => ...` — the single parameter is the arrow itself.
-              const bodyStart = r + 3;
-              const body = tokens[bodyStart] && tokens[bodyStart].v === '{'
-                ? bodySlice(tokens, bodyStart)
-                : tokens.slice(bodyStart, findExpressionBodyEnd(tokens, bodyStart));
-              push(nameTok.v, nameTok.line, asyncArrow ? 'async-arrow' : 'arrow', body);
-              continue;
-            } else if (tokens[r] && tokens[r].v === '<') {
-              const m = findAngleMatch(tokens, r);
-              if (m > 0 && tokens[m + 1] && tokens[m + 1].v === '(') {
-                paramsClose = findMatch(tokens, m + 1);
-              }
-            }
-            if (paramsClose > 0) {
-              const arrow = findArrow(tokens, paramsClose + 1);
-              if (arrow > 0) {
-                const bodyStart = arrow + 2;
-                const body = tokens[bodyStart] && tokens[bodyStart].v === '{'
-                  ? bodySlice(tokens, bodyStart)
-                  : tokens.slice(bodyStart, findExpressionBodyEnd(tokens, bodyStart));
-                push(nameTok.v, nameTok.line, asyncArrow ? 'async-arrow' : 'arrow', body);
-              }
-            }
-          }
+          const fn = readFunctionValue(tokens, eq + 1);
+          if (fn) push(nameTok.v, nameTok.line, fn.kind, fn.body);
         }
       }
       continue;
+    }
+
+    // --- object-property and class-field functions ---------------------------
+    //   `{ workerCount: () => … }`   object literal / property
+    //   `{ onDone: function () {…} }`
+    //   `workerCount = () => …`      class field
+    // There is no declaration keyword, so the branch above cannot see these — a
+    // real miss: object-property arrows were invisible to the tool entirely.
+    if (t.kind === 'id' && !NOT_NAMES.has(t.v) && isMemberContext(tokens, i)) {
+      const sep = tokens[i + 1];
+      if (sep && (sep.v === ':' || sep.v === '=')) {
+        const fn = readFunctionValue(tokens, i + 2);
+        // A lone `() => void` / `: string` is a type signature, not a function.
+        if (fn && !isBareTypeSignature(fn.body)) {
+          push(t.v, t.line, `property-${fn.kind}`, fn.body);
+        }
+      }
     }
 
     // --- class methods, object-literal methods, getters/setters --------------
@@ -869,12 +924,20 @@ const SKIP_DIR_PREFIXES = ['node_modules', 'dist'];
 /**
  * Source extensions the extractor understands. `--ext a,b,c` replaces this list.
  *
- * Deliberately EXCLUDES `.tsx` / `.jsx` / `.vue` / `.svelte`: those files interleave
- * markup with code, and the tokenizer below does not understand markup blocks, so
- * scanning them would report functions built from JSX/Vue noise — a silent lie in
- * the other direction. They need a real extractor; see `tools/README.md`.
+ * `.tsx` / `.jsx` ARE included: measured on a realistic component file, the
+ * tokenizer extracts the declarations correctly and JSX prose does not fabricate
+ * functions (the `>` that closes a tag is in EXPR_CONTINUATIONS, so a word after a
+ * tag is never treated as a member name). Excluding them silently missed every
+ * component in a React codebase — the failure mode this tool exists to avoid.
+ *
+ * `.vue` / `.svelte` stay OUT: they are single-file components where markup
+ * dominates and a `<script>` block may be absent, so the tokenizer would ingest the
+ * template as code. Those need a real extractor — see tools/README.md.
  */
-export const DEFAULT_EXTENSIONS = ['.ts', '.js', '.mjs', '.cjs'];
+export const DEFAULT_EXTENSIONS = [
+  '.ts', '.tsx', '.mts', '.cts',
+  '.js', '.jsx', '.mjs', '.cjs',
+];
 
 /** Normalise `--ext` values: trim, lowercase, and guarantee a leading dot. */
 export function normaliseExtensions(list) {
@@ -1610,9 +1673,10 @@ function main() {
       'Options:',
       '  --src DIR        source root to scan            (default: <repo>/src)',
       '  --report FILE    markdown report path           (default: reports/duplicate-candidates.md)',
-      '  --ext a,b,c      scan these extensions          (default: .ts,.js,.mjs,.cjs)',
-      '                   replaces the default list; markup files (.tsx/.jsx/.vue/',
-      '                   .svelte) are deliberately NOT scanned — see tools/README.md',
+      '  --ext a,b,c      scan these extensions          (default: .ts,.tsx,.mts,.cts,',
+      '                                                   .js,.jsx,.mjs,.cjs)',
+      '                   replaces the default list; .vue/.svelte are NOT scanned',
+      '                   (single-file components need a real extractor)',
       '  --max N          max pairs printed per tier     (default: 60; the report always has all)',
       '  --ignore a,b,c   replace the default ubiquitous-name ignore list',
       '  --no-ignore      disable ubiquitous-name filtering entirely',
