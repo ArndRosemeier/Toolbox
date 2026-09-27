@@ -22,15 +22,21 @@ tools/                          the portable toolbox — this is the unit you co
     README.md
     find-duplicate-candidates.mjs
     find-duplicate-candidates.test.mjs
-docs/
-  WAY-OF-WORKING.md             how code gets written here (Part 1 portable, Part 2 DSH)
-scaffold/                       day-1 machinery, copied into a NEW project
-  AGENTS.md.template            project rules template
+docs/                           the process documentation — the shared layer
+  README.md                     index: what to read, what to copy where
+  WAY-OF-WORKING.md             the process (Part 1 portable, Part 2 DSH mechanics)
+  BOARD.md                      the board — the state of record
+  DECISION-LEDGER.md            append-only decisions
+  SEAM-INDEX.md                 the one way to do X
+  TESTING.md                    what proves this, and what was actually run
+  GATE.md                       one gate command: tiers, lock, exit codes
   BRIEF.md                      the writer brief template
-  docs/BOARD.md                 the board — the state of record
-  docs/DECISION-LEDGER.md       append-only decisions
-  scripts/gate.sh               ONE gate command: lock + tiers + exit codes
+scaffold/                       day-1 files that are NOT documents
+  AGENTS.md.template            project rules template
+  scripts/gate.sh               the gate implementation
   scripts/board.sh              the reconciler
+tests/                          repo-level guards for the shared layer
+  shared-layer.test.mjs         nothing that travels names an app; every artifact is documented
 ```
 
 `tools/` is kept as a single self-contained folder on purpose: the whole folder is
@@ -46,8 +52,8 @@ Cross-project notes and decisions worth carrying between projects live in `docs/
 
 | Doc | What it covers |
 | --- | --- |
-| [`docs/WAY-OF-WORKING.md`](docs/WAY-OF-WORKING.md) | How code gets written in these projects. **Part 1** — the portable strategy: roles, the loop, the durable artifacts, verification doctrine, the brief. **Part 2** — the concrete DeepSeek Harness mechanics: the clock and the gate, worktrees, subagent and host hygiene. |
-| [`scaffold/`](scaffold/README.md) | The day-1 machinery to copy into a new project: project rules, the brief template, the board, the decision ledger, one gate command with an atomic lock, and a reconciler. |
+| [`docs/`](docs/README.md) | The documentation layer: the process, and one doc per durable artifact (board, decision ledger, seam index, testing doc, gate, brief). Start at [`docs/WAY-OF-WORKING.md`](docs/WAY-OF-WORKING.md). |
+| [`scaffold/`](scaffold/README.md) | The day-1 files that are **not** documents: the project-rules template and the two scripts (the gate, the reconciler). |
 
 ---
 

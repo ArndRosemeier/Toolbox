@@ -114,6 +114,10 @@ writing any feature code.
 | **Board** | *What is happening right now?* — in-flight writers, unlanded branches, the queue, traps. | **One screen, overwritten in place.** A record that no longer describes the present belongs in the ledger or nowhere. |
 | **Testing doc** | *What proves this, and what was actually run?* — the matrix, the pins, the differential arms with their hashes, the VOID probes. | Grows a section per landing; the raw gate log is kept until the landing is verified. |
 
+Each of the four has its own document in this folder, carrying the pattern **and** the
+skeleton to copy into a project: [`DECISION-LEDGER.md`](DECISION-LEDGER.md) ·
+[`SEAM-INDEX.md`](SEAM-INDEX.md) · [`BOARD.md`](BOARD.md) · [`TESTING.md`](TESTING.md).
+
 **The insight these four encode:** docs that *restate behaviour* rot; docs that
 *record decisions* do not. So behaviour lives in a test (the test **is** the
 statement), and the doc holds the pointer and the reason.

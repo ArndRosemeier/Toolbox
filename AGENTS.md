@@ -6,11 +6,21 @@ the owner overrides everything.
 
 ## What this repo is
 
-Toolbox is the **upstream source of truth** for portable, dependency-free codebase
-analysis tools that other projects copy. The unit of distribution is the whole
-`tools/` folder, copied into a target project's root. `tools/README.md` is the
-contract that travels with it — the folder's 8 rules plus the 10-step porting
-checklist.
+Toolbox is the **shared layer below the apps** — the upstream source of truth for two
+things that other projects copy or read:
+
+- **The process.** `docs/` documents how work is planned, briefed, verified and
+  recorded, and `scaffold/` holds the day-1 files that are not documents. The
+  host-global chief-of-staff role points **here**, not at any one app.
+  `docs/README.md` is the index; `docs/WAY-OF-WORKING.md` is the process; the rest is
+  one doc per durable artifact.
+- **The tools.** Portable, dependency-free codebase-analysis tools. The unit of
+  distribution is the whole `tools/` folder, copied into a target project's root;
+  `tools/README.md` is the contract that travels with it — its 8 rules plus the
+  10-step porting checklist.
+
+Both halves are portable by contract: nothing here may name the project it was
+written in.
 
 ## The write boundary (owner directive, 2026-09-21)
 
@@ -52,6 +62,8 @@ rather than working around the boundary.
   output must never carry the script names, gate commands, absolute paths or
   directory names of the project it happened to be written in (e.g.
   `npm run duplication:check`, `bash scripts/gate.sh`, `projects/Expert`). A consumer
-  copies this folder into *their* repo. The `portability:` test guards this class.
+  copies this folder into *their* repo. The `portability:` tests in
+  `tests/shared-layer.test.mjs` guard this class across `docs/`, `scaffold/` and
+  `tools/`.
 - **One logical change per commit.** Verify before claiming a pass: quote the test
   counts and exit codes actually observed, not the ones expected.

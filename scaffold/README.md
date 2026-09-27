@@ -1,28 +1,27 @@
-# `scaffold/` — the day-1 machinery for a new project
+# `scaffold/` — the day-1 files that are not documents
 
-Copy this into a new repo **before writing feature code**. It is the minimum the
-chief-of-staff role needs *on disk* to run the process described in
-[`../docs/WAY-OF-WORKING.md`](../docs/WAY-OF-WORKING.md): a board, a decision
-ledger, one gate command and a brief template.
+The process documentation lives in [`../docs/`](../docs/README.md). This folder holds
+the copy-ready files that are **not** documents: the project-rules template and the
+two scripts that implement the [gate](../docs/GATE.md) and the board's reconciler.
 
-**Why day 1.** A process added later is a process nobody follows. Each file here
-exists because its absence cost real work in a project that learned it the hard way
-— the reasons travel with the files, on purpose.
-
-These are **templates, not a framework**: plain markdown and two small shell
-scripts. Nothing here is a dependency, and nothing is project-specific — the stack
-commands are the only thing you must fill in.
-
-## What to copy where
+Copy them into a new repo **before writing feature code**. The full day-1 list —
+documents included — is in [`../docs/README.md`](../docs/README.md).
 
 | Copy | To | Then |
 | --- | --- | --- |
 | `AGENTS.md.template` | `<repo>/AGENTS.md` | fill the stack line; keep every rule |
-| `BRIEF.md` | `<repo>/docs/BRIEF.md` | the template every writer brief is cut from |
-| `docs/BOARD.md` | `<repo>/docs/BOARD.md` | set the repo/branch, delete the sample rows |
-| `docs/DECISION-LEDGER.md` | `<repo>/docs/DECISION-LEDGER.md` | keep the header; append rows as decisions are made |
 | `scripts/gate.sh` | `<repo>/scripts/gate.sh` | set `GATE_CHEAP_CMD` / `GATE_FULL_CMD`; `chmod +x` |
 | `scripts/board.sh` | `<repo>/scripts/board.sh` | set `BOARD_FILE` / remote / branch; `chmod +x` |
+
+And the documents, out of `../docs/`:
+
+| Copy | To |
+| --- | --- |
+| `docs/BOARD.md` | `<repo>/docs/BOARD.md` |
+| `docs/DECISION-LEDGER.md` | `<repo>/docs/DECISION-LEDGER.md` |
+| `docs/SEAM-INDEX.md` | `<repo>/docs/ARCHITECTURE.md` |
+| `docs/TESTING.md` | `<repo>/docs/TESTING.md` |
+| `docs/BRIEF.md` | `<repo>/docs/BRIEF.md` |
 
 The `.template` suffix on the project-rules file is deliberate: an `AGENTS.md` in
 this repo would be auto-loaded as binding instructions for the `scaffold/` subtree,
@@ -54,14 +53,14 @@ is the correct behaviour for a check that cannot see reality.
 
 ## Add the rest when you meet the failure
 
-The full process has more mechanics — probes, the seam index, differential
-verification, worktree recipes, host ceilings. **Do not build them all on day 1.**
-Each was added after a specific failure; add it when you meet that failure. What
-must exist on day 1 is exactly the four artifacts named above, because everything
+The full process has more mechanics — probes, differential verification, worktree
+recipes, host ceilings. **Do not build them all on day 1.** Each was added after a
+specific failure; add it when you meet that failure. What must exist on day 1 is the
+board, the decision ledger, one gate command and a brief template, because everything
 else presupposes them.
 
 ## If the project already has equivalents, they win
 
 This scaffold is a starting point. A project's own `AGENTS.md` and docs are the
-authority for its mechanics — adapt the files here rather than overriding a
-project's existing, better-informed rules.
+authority for its mechanics — adapt these files rather than overriding a project's
+existing, better-informed rules.
