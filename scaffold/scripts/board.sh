@@ -107,7 +107,12 @@ fi
 
 # --- branches claimed retired must be gone -----------------------------------
 echo "=== retired branches ==="
-RETIRED="$(sed -n 's/.*retired=[^|]*branch \([^ |]*\).*/\1/p' "$BOARD_FILE" | sort -u)"
+# A retirement CLAIM is the explicit key `retired_branch=<name>` and nothing else: one line
+# per branch, read literally. Prose about a retirement — especially one still OWED — must
+# never use the key. Measured 2026-09-27: a prose-matching parser read
+# "retired=NOT yet … branch feat/x" as a claim and reported a FALSE BOARD STALE while the
+# branch still existed, i.e. it blamed the record for a sentence describing the opposite.
+RETIRED="$(sed -n 's/^[[:space:]]*retired_branch=\([^[:space:]|]*\).*/\1/p' "$BOARD_FILE" | sort -u)"
 if [ -z "$RETIRED" ]; then
   note "none claimed"
 else

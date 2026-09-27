@@ -33,6 +33,7 @@ answer is a line, not a paragraph.
 | `PROBE` | a read-only agent in flight and the question it answers |
 | `IN-FLIGHT` | a writer: row, session, worktree, branch, base, **state**, and the full scope |
 | `LANDED` | a verified landing: row, sha, **the dispatcher's own verification numbers**, what was retired, the docs amended |
+| `retired_branch=<name>` | a CLAIM that `<name>` is retired — the **only** form the reconciler parses, read literally, one line per branch. Prose about a retirement (especially one still OWED) must not use this key: a prose-matching parser once read "retired=NOT yet … branch feat/x" as a claim and reported a false BOARD STALE while the branch still existed |
 | `QUEUE` | owner requests and known debt not yet dispatched, with the row number reserved |
 | `QUEUE-CLOSED` | a queue line whose scope is consumed (kept one screen, then dropped) |
 | `TRAP` | a mistake that actually happened, with the rule that prevents it |
@@ -52,6 +53,8 @@ SESSION | id=<session-id> | model=<provider>/<model> | state=<idle|dispatching|w
 
 QUEUE | row=1 | <the owner's request, in one line> | src=<where the detail lives>
 
+retired_branch=<a-branch-that-is-gone>   <!-- the ONLY form parsed as a retirement claim -->
+
 RECOVERY | repo=<absolute path> | remote=<url> | branch=<main> | gate=bash scripts/gate.sh
 ```
 
@@ -60,8 +63,8 @@ RECOVERY | repo=<absolute path> | remote=<url> | branch=<main> | gate=bash scrip
 ```
 LANDED | row=7 | sha=<40-hex> | verify=MY OWN: cheap tier green (exit 2) + full gate
   GREEN · <N>/<N> tests · peak <N>MB | arms=<hash-a> vs <hash-b> — arm B red on
-  <named pin> | retired=branch <name> + worktree <path> + session <id> | docs=ledger
-  row 7, board | note=<one line>
+  <named pin> | worktree <path> and session <id> retired; the branch claim is its own
+  `retired_branch=<name>` line | docs=ledger row 7, board | note=<one line>
 ```
 
 ## Guards
