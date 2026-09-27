@@ -31,10 +31,18 @@ const LEAKS = [
   'duplication:check',
 ];
 
-/** The one file allowed to cite a worked example, and why. */
-const MAY_CITE_AN_EXAMPLE = [path.join('docs', 'WAY-OF-WORKING.md')];
+/**
+ * Files allowed to contain a forbidden string:
+ *  - WAY-OF-WORKING.md cites a worked example by name;
+ *  - the duplicate tool's test DEFINES a denylist, so it must contain the very
+ *    strings it denies — a guard has to name what it forbids.
+ */
+const EXEMPT = [
+  path.join('docs', 'WAY-OF-WORKING.md'),
+  path.join('tools', 'duplicate-candidates', 'find-duplicate-candidates.test.mjs'),
+];
 
-const PORTABLE_ROOTS = ['docs', 'scaffold'];
+const PORTABLE_ROOTS = ['docs', 'scaffold', 'tools'];
 
 function walk(dir) {
   const out = [];
@@ -50,7 +58,7 @@ function walk(dir) {
 function portableFiles() {
   const files = [];
   for (const rel of PORTABLE_ROOTS) files.push(...walk(path.join(ROOT, rel)));
-  return files.filter((f) => !MAY_CITE_AN_EXAMPLE.includes(path.relative(ROOT, f)));
+  return files.filter((f) => !EXEMPT.includes(path.relative(ROOT, f)));
 }
 
 test('portability: the docs and the scaffold carry no source-project specifics', () => {

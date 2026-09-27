@@ -22,6 +22,10 @@ tools/                          the portable toolbox — this is the unit you co
     README.md
     find-duplicate-candidates.mjs
     find-duplicate-candidates.test.mjs
+  socket-peers/                 both ends of every connection, attributed (Linux /proc)
+    README.md
+    find-socket-peers.mjs
+    find-socket-peers.test.mjs
 docs/                           the process documentation — the shared layer
   README.md                     index: what to read, what to copy where
   WAY-OF-WORKING.md             the process (Part 1 portable, Part 2 DSH mechanics)
@@ -31,6 +35,7 @@ docs/                           the process documentation — the shared layer
   TESTING.md                    what proves this, and what was actually run
   GATE.md                       one gate command: tiers, lock, exit codes
   BRIEF.md                      the writer brief template
+  TRAPS.md                      mistakes that happened, and the rules that prevent them
 scaffold/                       day-1 files that are NOT documents
   AGENTS.md.template            project rules template
   scripts/gate.sh               the gate implementation
@@ -62,6 +67,7 @@ Cross-project notes and decisions worth carrying between projects live in `docs/
 | Tool | Command | What it finds |
 | --- | --- | --- |
 | `duplicate-candidates` | `node tools/duplicate-candidates/find-duplicate-candidates.mjs --src <dir>` | Function-like declarations sharing an **exact, normalised or near-identical name** across different files — Type-4 clone candidates that `jscpd` (token-based) is structurally blind to. Writes `reports/duplicate-candidates.md`. |
+| `socket-peers` | `npm run socket:peers` | **Both ends** of every loopback connection, attributed to its owning process — flagging a process that holds many **client-end** sockets against few **server-end** ones. Linux `/proc` only; read-only. |
 
 ---
 

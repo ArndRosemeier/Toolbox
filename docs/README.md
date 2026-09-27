@@ -36,6 +36,12 @@ behaviour is the test.
 | [`GATE.md`](GATE.md) | The one gate command: two tiers, the atomic lock, the exit-code vocabulary, and the rules around it. |
 | [`BRIEF.md`](BRIEF.md) | The writer brief template, and the dispatcher's pre-send checklist. |
 
+## Field notes
+
+| Doc | What it is |
+| --- | --- |
+| [`TRAPS.md`](TRAPS.md) | Mistakes that actually happened, with the rule that prevents each one — and, where useful, how to reproduce it. Read the entry that matches what you are doing right now. |
+
 ## The day-1 files that are not documents
 
 The copy-ready **non-document** files live in [`../scaffold/`](../scaffold/README.md):

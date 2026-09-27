@@ -54,6 +54,7 @@ every project this folder is ported to.
 | Tool | Command | What it finds |
 | --- | --- | --- |
 | `duplicate-candidates` | `npm run dup:candidates` | Function-like declarations that share an **exact, normalised or near-identical name** across different files — Type-4 clone candidates that `jscpd` cannot see. Writes `reports/duplicate-candidates.md`. |
+| `socket-peers` | `npm run socket:peers` | **Both ends** of every loopback connection, attributed to the process that owns it — flagging one that holds many **client-end** sockets against few **server-end** ones (an accumulator holding sockets for clients that are gone). Linux `/proc` only. |
 
 ---
 
