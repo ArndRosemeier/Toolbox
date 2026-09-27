@@ -13,12 +13,19 @@ It is written in two parts on purpose:
 - **Part 2 — how we run it on the DeepSeek Harness (DSH).** Concrete: the actual
   tools, paths, limits and gotchas of this environment.
 
-**Provenance.** The reference implementation is the **Campaigner** project
-(`~/projects/Campaigner`). Its `docs/22-DEVELOPMENT-PROCESS.md` is the portable form
-that Part 1 distills; `docs/20-ORCHESTRATION.md` is a live board; its `AGENTS.md`
-carries the detailed parallel-writer, worktree, host-hygiene and gate rules that
-Part 2 draws on. If a project has its own equivalents, **they win** — this document
-is a starting point, not an override.
+**Where this lives.** This file is the **canonical home** of the process. It is meant
+to sit *below* any single app, and it is owned by the Toolbox repo — not by a project
+that happens to implement it. The copyable day-1 machinery (project rules, the brief,
+the board, the decision ledger, the gate, the reconciler) is in
+[`../scaffold/`](../scaffold/). If a project already has its own equivalents, **they
+win** — this is a starting point, not an override.
+
+**Provenance.** The process was developed in, and is still exercised by, the
+**Campaigner** project (`~/projects/Campaigner`) — a worked example, not the source of
+truth. Its `docs/22-DEVELOPMENT-PROCESS.md` is the portable form Part 1 distills;
+`docs/20-ORCHESTRATION.md` is a live board; its `AGENTS.md` carries the
+parallel-writer, worktree, host-hygiene and gate rules Part 2 draws on. Read them as
+*an* implementation, not *the* reference.
 
 **A rule of this document, inherited from its sources:** every rule below exists
 because its absence cost something real, so where a rule has an incident, the
