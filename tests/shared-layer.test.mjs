@@ -25,6 +25,7 @@ const LEAKS = [
   'Campaigner',
   'FracVibe',
   'CivGlm',
+  'Imager',
   'Orion',
   'projects/Expert',
   'duplication:check',

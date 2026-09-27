@@ -611,7 +611,9 @@ a stopped one lingering for days.
 Real incident, owner-visible: four writers in flight plus a load generator drove the
 load average to ~106 on an 8-core box and starved everything; DSH had to be restarted
 by the owner. Second occurrence: a writer's **unbounded** test run outlived its turn
-and kept going. Third: the kernel OOM-killed the harness itself.
+and kept going. Third: the kernel OOM-killed the harness itself. Fourth: **one
+headless-Chrome run left 33 Chrome processes alive** (Imager, 2026-09-27) — a browser
+is a process *tree*, and that script's cleanup ran only on the happy path.
 
 - **At most TWO writers in flight.** Count the registry before dispatching; a verified
   landing frees a slot.
@@ -625,18 +627,34 @@ and kept going. Third: the kernel OOM-killed the harness itself.
 - **An interrupted turn's processes are the dispatcher's to reap.** A turn that dies —
   restart, crash, killed session — does NOT kill what it started. After any restart or
   interrupted writer, the dispatcher's FIRST action is a process audit, and it kills
-  the orphans before dispatching anything new.
-- **Kill by PID with a self-excluding pattern.** A command line containing the pattern
-  it greps for matches itself: `pkill -f "vitest run"` can SIGTERM its own shell, and a
-  combined `pgrep` one-liner reports BUSY forever. Build the pattern so the killer
-  cannot match it, use `pgrep -af "vites[t]"`, then kill by PID.
+  the orphans before dispatching anything new. **The audit includes browsers**
+  (`chrome`, `chromium`, `headless_shell`, `playwright`, `puppeteer`), not only test
+  runners.
+- **Kill by PID, captured in ONE call and killed in a SEPARATE one — never by a pattern
+  in the same shell.** A command line containing the pattern it greps for matches
+  itself: a `for p in $(pgrep -f "<pattern>"); do kill $p; done` one-liner SIGTERMed the
+  shell running it **twice in one session**, and a combined `pgrep` one-liner can report
+  BUSY forever on a process that does not exist. The `[x]` bracket trick (`vites[t]`)
+  helps only while the pattern is not ALSO literal text elsewhere in that same argv — so
+  the reliable method is two calls: capture (`pgrep -f '<pat>' > pids.txt`), then kill
+  (`xargs -r kill < pids.txt`).
+- **Verify a kill with a count that cannot self-match.** `ps -eo comm= | grep -c
+  '^chrome$'` counts by executable name, so the killing shell (`bash`) is not in it —
+  expect `0`. A `pgrep -c -f <pattern>` taken from the same shell can count the shell
+  itself and report processes that do not exist; part of one session's "leftovers" was
+  exactly that, and it cost real time chasing phantoms.
+- **A headless browser is a process TREE, and its kill belongs in a `trap`.** ONE
+  headless-Chrome run left **33 Chrome processes** alive — the browser plus zygote, GPU
+  and renderer children. Killing the launcher does not kill the tree, and a cleanup that
+  runs only on the happy path is skipped entirely when the page fails to render. Start a
+  browser in-turn, kill the tree before you report, on **success and failure alike**.
 - **Ownership is the worktree path in the COMMAND LINE**, not `cwd` — `cwd` is
   unreadable for subagent-owned processes and silently matches nothing.
 - **Foreign suites are waited for, not reaped.** Another DSH project may share this
   box; a suite you did not start is not yours.
 - **Nothing outlives the writer.** Scratch harnesses live under the writer's own
-  worktree or the gate's workspace log dir, never `/tmp`; every process it starts is
-  foreground or killed before it reports.
+  worktree or the gate's workspace log dir, never `/tmp`; every process it starts — a
+  headless browser included — is foreground or killed before it reports.
 - **An OOM-killed session is indistinguishable from a writer dying silently with an
   empty report** — memory pressure destroys WORK, not merely responsiveness.
 

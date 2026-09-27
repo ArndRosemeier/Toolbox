@@ -113,6 +113,20 @@ it.
    cause, never by loading the machine.
 3. **Every run carries a memory ceiling**, and one suite runs at a time.
 4. **An interrupted turn's processes are the dispatcher's to reap** — a turn that
-   dies does not kill what it started.
-5. **Nothing outlives the writer:** scratch harnesses live under its own worktree,
-   never `/tmp`; every process it starts is foreground or killed before it reports.
+   dies does not kill what it started. The audit includes **browsers** (`chrome`,
+   `chromium`, `headless_shell`, `playwright`), not only test runners.
+5. **Kill by PID captured in a SEPARATE call — never by a pattern in the same
+   shell.** A `for p in $(pgrep -f "<pattern>"); do kill $p; done` one-liner
+   SIGTERMed the shell running it **twice in one session**, and the `[x]` bracket
+   trick fails when the pattern is also literal text in that same argv. Capture
+   (`pgrep -f '<pat>' > pids.txt`), then kill (`xargs -r kill < pids.txt`), then
+   verify with a count that cannot self-match (`ps -eo comm= | grep -c '^chrome$'` —
+   expect `0`).
+6. **A headless browser is a process TREE, and its kill belongs in a `trap`.** ONE
+   headless-Chrome run left **33 Chrome processes** alive — browser, zygote, GPU and
+   renderer children. Killing the launcher does not kill the tree, and a cleanup that
+   runs only on the happy path is skipped entirely when a page fails to render. Start
+   a browser in-turn, kill the tree before you report, on success and failure alike.
+7. **Nothing outlives the writer:** scratch harnesses live under its own worktree,
+   never `/tmp`; every process it starts — a browser included — is foreground or
+   killed before it reports.

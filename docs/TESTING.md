@@ -20,6 +20,11 @@ rules make a pin worth having:
    differential below is for.
 3. **Reuse the existing harness.** A second fixture set for the same idea is
    duplication that drifts (see [`SEAM-INDEX.md`](SEAM-INDEX.md)).
+4. **A real-browser pin reaps its browser.** A headless browser is a process *tree* —
+   one run left **33 Chrome processes** alive — so start it in-turn, put the kill in a
+   `trap`, and verify the count is zero before you report, on success and failure
+   alike. The kill method and the self-match trap are in
+   [`WAY-OF-WORKING.md`](WAY-OF-WORKING.md) Part 2 §7.
 
 ## The differential (the injection)
 
