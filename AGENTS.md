@@ -6,8 +6,8 @@ the owner overrides everything.
 
 ## What this repo is
 
-Toolbox is the **shared layer below the apps** — the upstream source of truth for two
-things that other projects copy or read:
+Toolbox is the **shared layer below the apps** — the upstream source of truth for the
+process, the tools, and the small things that do not justify a project of their own:
 
 - **The process.** `docs/` documents how work is planned, briefed, verified and
   recorded, and `scaffold/` holds the day-1 files that are not documents. The
@@ -18,9 +18,14 @@ things that other projects copy or read:
   distribution is the whole `tools/` folder, copied into a target project's root;
   `tools/README.md` is the contract that travels with it — its 8 rules plus the
   10-step porting checklist.
+- **Things too small for a real project.** A small utility, or a one-off fix that
+  does not justify its own repository, belongs **here** rather than nowhere. Size and
+  scope decide, not subject (owner rule, 2026-09-27). The portable-by-contract rule
+  still binds `tools/`, `docs/` and `scaffold/`: anything host-bound goes in its own
+  place, clearly marked as not travelling.
 
-Both halves are portable by contract: nothing here may name the project it was
-written in.
+The process and the tools are **portable by contract**: nothing in `docs/`,
+`scaffold/` or `tools/` may name the project — or the host — it was written in.
 
 ## The write boundary (owner directive, 2026-09-21)
 
