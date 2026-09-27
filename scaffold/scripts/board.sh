@@ -36,6 +36,16 @@ STALE=0
 note()  { printf '  %s\n' "$1"; }
 stale() { printf '  STALE: %s\n' "$1"; STALE=1; }
 
+# --- resolving a rev, the way that FAILS -------------------------------------
+# A bare `git rev-parse <unresolvable-ref>` ECHOES THE REF BACK verbatim and exits 128
+# (the complaint goes to stderr), so `2>/dev/null || true` leaves a NON-EMPTY, NON-SHA
+# string, the emptiness guard below never fires, and the reconciler reports the RECORD
+# as stale when the truth is that it cannot look at all. `--verify --quiet` prints
+# nothing and exits non-zero instead, and the shape check turns that into a boundary
+# rather than a hope.
+resolve() { git rev-parse --verify --quiet "$1^{commit}" 2>/dev/null || true; }
+is_sha()  { [ "${#1}" -eq 40 ] && case "$1" in *[!0-9a-f]*) return 1;; *) return 0;; esac; }
+
 echo "=== board reconciler ==="
 echo "board:  $BOARD_FILE"
 echo "remote: $REMOTE/$BRANCH"
@@ -50,15 +60,20 @@ fi
 
 git fetch -q "$REMOTE" "$BRANCH" 2>/dev/null \
   || echo "  NOTE: fetch failed — comparing against the last known remote state."
-REMOTE_SHA="$(git rev-parse "$REMOTE/$BRANCH" 2>/dev/null || true)"
-if [ -z "$REMOTE_SHA" ]; then
-  echo "CANNOT LOOK: $REMOTE/$BRANCH does not resolve."; exit 1
+REMOTE_SHA="$(resolve "$REMOTE/$BRANCH")"
+if ! is_sha "$REMOTE_SHA"; then
+  echo "CANNOT LOOK: $REMOTE/$BRANCH does not resolve to a commit."
+  echo "  (a check that cannot see reality must not pass silently — and must not"
+  echo "   blame the record for its own blindness)"
+  exit 1
 fi
 echo "remote: $REMOTE/$BRANCH = $REMOTE_SHA"
 
 # --- local vs remote: reconcile against the REMOTE, never a stale local ------
-LOCAL_SHA="$(git rev-parse HEAD 2>/dev/null || true)"
-if [ "$LOCAL_SHA" = "$REMOTE_SHA" ]; then
+LOCAL_SHA="$(resolve HEAD)"
+if ! is_sha "$LOCAL_SHA"; then
+  stale "local HEAD does not resolve to a commit — cannot compare with $REMOTE/$BRANCH"
+elif [ "$LOCAL_SHA" = "$REMOTE_SHA" ]; then
   note "local HEAD == $REMOTE/$BRANCH"
 else
   stale "local HEAD ($LOCAL_SHA) != $REMOTE/$BRANCH ($REMOTE_SHA) — reconcile against the REMOTE"
