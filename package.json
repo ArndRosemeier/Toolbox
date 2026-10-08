@@ -9,6 +9,8 @@
   },
   "scripts": {
     "test": "node --test \"tools/**/*.test.mjs\" \"tests/**/*.test.mjs\"",
+    "dup:candidates": "node tools/duplicate-candidates/find-duplicate-candidates.mjs",
+    "repeated:code": "node tools/repeated-code/find-repeated-code.mjs",
     "socket:peers": "node tools/socket-peers/find-socket-peers.mjs"
   },
   "keywords": [
