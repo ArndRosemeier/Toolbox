@@ -54,6 +54,7 @@ every project this folder is ported to.
 | Tool | Command | What it finds |
 | --- | --- | --- |
 | `duplicate-candidates` | `npm run dup:candidates` | Function-like declarations that share an **exact, normalised or near-identical name** across different files — Type-4 clone candidates that `jscpd` cannot see. Writes `reports/duplicate-candidates.md`. |
+| `repeated-code` | `npm run repeated:code` | Copies the name-based finder cannot see: **function bodies that are near-identical under different names** (MinHash + LSH over the body's shape), and **inline idioms** pasted into several files, ranked by how specific their property and method names are. Writes `reports/repeated-code.md`. |
 | `socket-peers` | `npm run socket:peers` | **Both ends** of every loopback connection, attributed to the process that owns it — flagging one that holds many **client-end** sockets against few **server-end** ones (an accumulator holding sockets for clients that are gone). Linux `/proc` only. |
 
 ---
@@ -72,6 +73,10 @@ repo without reading this project's history first.
        find-duplicate-candidates.mjs
        find-duplicate-candidates.test.mjs
        README.md
+     repeated-code/              (imports duplicate-candidates: copy both)
+       find-repeated-code.mjs
+       find-repeated-code.test.mjs
+       README.md
    ```
 2. **Check the runtime.** The tool assumes Node ≥ 24 (`node --test`, ESM,
    `fs.readdirSync(..., { withFileTypes: true })`). It has no other assumptions.
@@ -85,6 +90,7 @@ repo without reading this project's history first.
 4. **Wire the package scripts** (keep every existing script):
    ```json
    "dup:candidates": "node tools/duplicate-candidates/find-duplicate-candidates.mjs",
+   "repeated:code": "node tools/repeated-code/find-repeated-code.mjs",
    "test": "node --test \"tools/**/*.test.mjs\""
    ```
    The **quoted glob is required**; a bare directory argument does not behave the

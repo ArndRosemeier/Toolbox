@@ -96,7 +96,7 @@ So the two are complements, not competitors:
 | 2 — renamed | token / AST with normalisation | its **normalised** and **near** tiers match renamed *names*; body `sim` is a hint |
 | 3 — near-miss | AST (NiCad, Deckard), tolerant token matchers | not found by body — only if the names still match |
 | 4 — semantic, **same name** | effectively unreached by practical tools | **its angle** |
-| 4 — semantic, **different names** | graph / ML, research-grade | **not covered** — see §Known limitations |
+| 4 — semantic, **different names** | graph / ML, research-grade | **not covered**; near-identical bodies under different names: `../repeated-code` |
 
 ### What to run alongside it
 
@@ -105,9 +105,11 @@ So the two are complements, not competitors:
 2. **A lint-integrated identical-body check** — `eslint-plugin-sonarjs` →
    `sonarjs/no-identical-functions`, if you want it on every commit rather than in a
    separate job.
-3. **This tool for the name-based angle** — a reading list for the rewrites the above
+3. **`../repeated-code`** for what names cannot show: the same body under different
+   names, and inline idioms pasted into several files with no function around them.
+4. **This tool for the name-based angle** — a reading list for the rewrites the above
    cannot see. Do not make it a gate: it points, it does not judge.
-4. **Graph- or ML-based tooling only when the payoff justifies the setup** — the
+5. **Graph- or ML-based tooling only when the payoff justifies the setup** — the
    honest route to renamed-body Type 4, and still probabilistic.
 
 ---
