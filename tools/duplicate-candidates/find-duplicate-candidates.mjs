@@ -977,6 +977,54 @@ export function skipSuffixesFor(extensions) {
  * @param {{displayBase?: string, extensions?: string[]}} [opts]
  */
 export function scanTree(rootDir, opts = {}) {
+  const { files, skipped, display, extensions } = listSourceFiles(rootDir, opts);
+
+  const functions = [];
+  for (const file of files) {
+    let source;
+    try {
+      source = fs.readFileSync(file, 'utf8');
+    } catch (err) {
+      skipped.push({ file: display(file), reason: `read: ${err.code || err.message}` });
+      continue;
+    }
+    try {
+      for (const fn of extractFunctions(source)) {
+        functions.push({
+          name: fn.name,
+          file: display(file),
+          line: fn.line,
+          kind: fn.kind,
+          size: fn.tokens.length,
+          tokens: fn.tokens,
+          _shapeSet: null,
+        });
+      }
+    } catch (err) {
+      skipped.push({ file: display(file), reason: `parse: ${err.message}` });
+    }
+  }
+
+  functions.sort((a, b) => {
+    if (a.file !== b.file) return a.file < b.file ? -1 : 1;
+    if (a.line !== b.line) return a.line - b.line;
+    return a.name < b.name ? -1 : a.name > b.name ? 1 : 0;
+  });
+
+  return { rootDir, filesScanned: files.length, extensions, functions, skipped };
+}
+
+/**
+ * The source files under `rootDir` this folder's tools scan, in a stable order:
+ * the supported extensions, minus declaration files and tests/specs, never
+ * following symlinks, skipping `node_modules` and `dist*`. Shared by every tool
+ * here so they all scan the same set. `display(abs)` turns a path into the
+ * report form (relative to `displayBase`).
+ *
+ * @param {string} rootDir absolute path
+ * @param {{displayBase?: string, extensions?: string[]}} [opts]
+ */
+export function listSourceFiles(rootDir, opts = {}) {
   const displayBase = opts.displayBase || path.dirname(rootDir);
   const extensions = opts.extensions && opts.extensions.length
     ? opts.extensions
@@ -1015,40 +1063,7 @@ export function scanTree(rootDir, opts = {}) {
   };
 
   walk(rootDir);
-
-  const functions = [];
-  for (const file of files) {
-    let source;
-    try {
-      source = fs.readFileSync(file, 'utf8');
-    } catch (err) {
-      skipped.push({ file: display(file), reason: `read: ${err.code || err.message}` });
-      continue;
-    }
-    try {
-      for (const fn of extractFunctions(source)) {
-        functions.push({
-          name: fn.name,
-          file: display(file),
-          line: fn.line,
-          kind: fn.kind,
-          size: fn.tokens.length,
-          tokens: fn.tokens,
-          _shapeSet: null,
-        });
-      }
-    } catch (err) {
-      skipped.push({ file: display(file), reason: `parse: ${err.message}` });
-    }
-  }
-
-  functions.sort((a, b) => {
-    if (a.file !== b.file) return a.file < b.file ? -1 : 1;
-    if (a.line !== b.line) return a.line - b.line;
-    return a.name < b.name ? -1 : a.name > b.name ? 1 : 0;
-  });
-
-  return { rootDir, filesScanned: files.length, extensions, functions, skipped };
+  return { files, skipped, display, extensions };
 }
 
 // ---------------------------------------------------------------------------
