@@ -63,6 +63,11 @@ the next session — in either harness — must be able to act from it in minute
   command; never pipe the gate through `tail`/`head`.
 - **Writers:** at most two, each in its own worktree, each with absolute paths in the
   brief. The role prompt is `.claude/agents/writer.md`.
+- **The worktree guard:** before dispatching, record each writer's worktree with
+  `node scripts/cos.mjs worktree add <absolute path>`. The `PreToolUse` hook denies
+  writes outside those roots for child sessions; the dispatcher's own session is
+  spared. Remove the root when the writer retires (`worktree remove`), or
+  `worktree clear` when none remain.
 - **The dispatcher keeps the verdict.** The gate supplies evidence; a test passing is
   not the same as the owner's intent being served. Never automate "verified".
 

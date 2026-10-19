@@ -37,7 +37,14 @@ the cadence contract ("silence until LANDED or BLOCKED"), the `COPIES:` line, an
 "the brief may be wrong — prove it and report BLOCKED".
 
 **Dispatch.** At most TWO writers in flight, each in its own worktree, each with
-absolute paths. The role prompt is `.claude/agents/writer.md`:
+absolute paths. Record each worktree FIRST — the PreToolUse guard uses it to deny
+writes outside the writer's scope:
+
+```bash
+node scripts/cos.mjs worktree add <ABSOLUTE worktree path>
+```
+
+The role prompt is `.claude/agents/writer.md`:
 
 ```bash
 node scripts/cos.mjs dispatch writer
@@ -45,7 +52,9 @@ node scripts/cos.mjs dispatch writer
 
 then pass the body plus the brief to the `subagent` tool (DSH) or the Task tool
 (Claude Code). A read-only probe uses `.claude/agents/probe.md`; a reviewer uses
-`.claude/agents/reviewer.md`.
+`.claude/agents/reviewer.md`. When a writer retires, remove its worktree from the
+guard (`node scripts/cos.mjs worktree remove <path>`, or `worktree clear` when none
+remain).
 
 **Verify every landing yourself.** The commit on the **remote**; YOUR OWN gate run
 with the raw log kept; the pins red against a NAMED injection; docs amended in the
