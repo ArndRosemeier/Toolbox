@@ -122,11 +122,21 @@ project needs the Toolbox scaffold; an existing Claude Code-native project needs
 minimal adoption (see Installation). Never create a second instruction file.
 ```
 
-### What the owner should not say any more
+### The trigger is enough
 
-`Just be my chief of staff` on a project that has no `docs/CROSS-TOOL.md` and no
-`HANDOFF.md`. The role is not the contract. The contract is on disk; the designation
-points at it.
+**"Be my chief of staff" is the designation.** In DSH the host rule points here; in
+Claude Code the user-level memory (`~/.claude/CLAUDE.md`) does. On a project that has
+this contract, the agent reads the instruction file, this doc and `HANDOFF.md`, runs
+the status line, reconciles, and works.
+
+On a project that has **no** contract, the agent reports the gap in one line and offers
+the one-step fix: the Toolbox scaffold for a greenfield project, minimal adoption for
+an existing Claude Code-native project. It does not rewrite an existing repo without
+your word, and it does not invent the stack or the gate commands. To pre-authorize,
+add **"and adopt it"** (or **"and scaffold it"**) to the designation.
+
+The two forms above remain useful when you want the procedure spelled out, or when the
+agent is running somewhere the trigger is not installed.
 
 ## Installation
 
