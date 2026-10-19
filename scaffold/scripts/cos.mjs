@@ -223,37 +223,56 @@ function doctor() {
   const rows = [];
   let failed = false;
 
-  const required = [
-    'AGENTS.md',
+  // The cross-tool contract's core files. The instruction file is checked below
+  // because a project may use either filename.
+  for (const rel of [
     'HANDOFF.md',
     'docs/CROSS-TOOL.md',
-    '.claude/commands/chief-of-staff.md',
-    '.claude/agents/writer.md',
     'scripts/gate.sh',
     'scripts/cos.mjs',
     '.cos/hooks/session-start.sh',
     '.cos/hooks/pre-tool-use.sh',
     '.cos/hooks/stop.sh',
-  ];
-  for (const rel of required) {
+  ]) {
     const ok = fs.existsSync(path.join(PROJECT, rel));
     if (!ok) failed = true;
     rows.push(`${ok ? 'OK  ' : 'FAIL'} ${rel}`);
   }
 
+  // A project may use EITHER instruction filename. Both harnesses read both
+  // (Claude Code 2.1.x reads AGENTS.md too), so the contract must not force a
+  // rename on a project that already has one. Two different files are the defect.
   const agents = path.join(PROJECT, 'AGENTS.md');
-  if (fs.existsSync(agents)) {
-    const size = fs.statSync(agents).size;
+  const claude = path.join(PROJECT, 'CLAUDE.md');
+  const hasAgents = fs.existsSync(agents);
+  const hasClaude = fs.existsSync(claude);
+  if (!hasAgents && !hasClaude) {
+    failed = true;
+    rows.push('FAIL instruction file: neither AGENTS.md nor CLAUDE.md');
+  } else if (hasAgents && hasClaude) {
+    const isLink = fs.lstatSync(claude).isSymbolicLink();
+    const same = isLink || fs.readFileSync(claude, 'utf8') === fs.readFileSync(agents, 'utf8');
+    if (!same) {
+      failed = true;
+      rows.push('FAIL two instruction files differ: AGENTS.md and CLAUDE.md — keep ONE');
+    } else {
+      rows.push(`OK   AGENTS.md + CLAUDE.md (${isLink ? 'symlinked' : 'identical'})`);
+    }
+  }
+  const instruction = hasAgents ? agents : hasClaude ? claude : '';
+  if (instruction) {
+    const size = fs.statSync(instruction).size;
     const ok = size <= budget;
     if (!ok) failed = true;
-    rows.push(`${ok ? 'OK  ' : 'FAIL'} AGENTS.md ${size} bytes (budget ${budget})`);
+    rows.push(`${ok ? 'OK  ' : 'FAIL'} ${path.basename(instruction)} ${size} bytes (budget ${budget})`);
   }
 
-  const claude = path.join(PROJECT, 'CLAUDE.md');
-  if (fs.existsSync(claude)) {
-    const isLink = fs.lstatSync(claude).isSymbolicLink();
-    const same = isLink || fs.readFileSync(claude, 'utf8') === readText(agents);
-    rows.push(`${same ? 'OK  ' : 'WARN'} CLAUDE.md ${isLink ? 'is a symlink' : same ? 'matches AGENTS.md' : 'differs from AGENTS.md'}`);
+  // These are part of the Toolbox scaffold, not the cross-tool contract: a project
+  // with its own command/agent conventions (a thin CLAUDE.md + PR flow) does not
+  // need them. Missing is a warning, never a failure.
+  for (const rel of ['.claude/commands/chief-of-staff.md', '.claude/agents/writer.md']) {
+    const ok = fs.existsSync(path.join(PROJECT, rel));
+    rows.push(`${ok ? 'OK  ' : 'WARN'} ${rel}${ok ? '' : ' (optional; the project may use its own)'}`);
   }
 
   const lock = lockState();
@@ -321,6 +340,12 @@ function init() {
 
   if (!fs.existsSync(path.join(scaffold, 'AGENTS.md.template'))) {
     fail('init must run from the Toolbox scaffold (scaffold/scripts/cos.mjs)');
+  }
+  if (fs.existsSync(path.join(target, 'CLAUDE.md')) && !force) {
+    fail(`${target}/CLAUDE.md already exists — this is a Claude Code-native project, ` +
+      `not a greenfield one. Use minimal adoption (docs/CROSS-TOOL.md): add ` +
+      `HANDOFF.md, scripts/gate.sh, scripts/cos.mjs and .cos/hooks, and keep CLAUDE.md. ` +
+      `Do not create a second instruction file.`);
   }
   if (fs.existsSync(path.join(target, 'AGENTS.md')) && !force) {
     fail(`${target}/AGENTS.md already exists; pass --force to overwrite`);

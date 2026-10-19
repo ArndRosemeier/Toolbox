@@ -21,6 +21,13 @@ the scaffold-relative links in the copied docs, and appends the `.gitignore` ent
 It does not run `git init` and does not overwrite an existing `AGENTS.md` unless you
 pass `--force`.
 
+`cos init` **refuses** a directory that already has `CLAUDE.md` or `AGENTS.md`. An
+existing Claude Code-native project (a thin `CLAUDE.md`, guards in its test command,
+a PR + change-note flow) uses **minimal adoption** instead — keep its instruction
+file and landing protocol, and add only `HANDOFF.md`, `scripts/gate.sh`,
+`scripts/cos.mjs`, `scripts/cos-hook.mjs` and `.cos/hooks/`. See
+[`../docs/CROSS-TOOL.md`](../docs/CROSS-TOOL.md), "Minimal adoption".
+
 ## The files
 
 | Copy | To | Then |

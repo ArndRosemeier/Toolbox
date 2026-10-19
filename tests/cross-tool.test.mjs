@@ -269,3 +269,35 @@ test('cross-tool: SessionStart injects the handoff and the status line', () => {
     fs.rmSync(dir, { recursive: true, force: true });
   }
 });
+
+test('cross-tool: doctor accepts CLAUDE.md as the one instruction file, and rejects two', () => {
+  const dir = initProject();
+  try {
+    fs.rmSync(path.join(dir, 'AGENTS.md'));
+    fs.writeFileSync(path.join(dir, 'CLAUDE.md'), '# Rules\n\nCLAUDE-ONLY\n');
+    const ok = run(dir, ['doctor']);
+    assert.equal(ok.status, 0, ok.stdout);
+    assert.ok(ok.stdout.includes('CLAUDE.md'), ok.stdout);
+    assert.ok(!ok.stdout.includes('FAIL'), ok.stdout);
+
+    fs.writeFileSync(path.join(dir, 'AGENTS.md'), '# Different rules\n');
+    const bad = run(dir, ['doctor']);
+    assert.equal(bad.status, 1, bad.stdout);
+    assert.ok(bad.stdout.includes('two instruction files differ'), bad.stdout);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('cross-tool: cos init refuses a CLAUDE.md project instead of creating a second law', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'cos-claude-'));
+  try {
+    fs.writeFileSync(path.join(dir, 'CLAUDE.md'), '# Rules\n');
+    const result = spawnSync('node', [COS, 'init', dir], { encoding: 'utf8' });
+    assert.equal(result.status, 2, `${result.stdout}${result.stderr}`);
+    assert.ok(result.stderr.includes('minimal adoption'), result.stderr);
+    assert.ok(!fs.existsSync(path.join(dir, 'AGENTS.md')), 'must not create a second instruction file');
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
