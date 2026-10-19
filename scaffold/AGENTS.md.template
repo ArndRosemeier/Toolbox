@@ -10,6 +10,24 @@ The full process — roles, the board, verification doctrine, the brief template
 in the shared doc `WAY-OF-WORKING.md` (from the Toolbox repo). Read it when you are
 new to this workflow. This file holds only what is **binding here**.
 
+## Cross-tool contract (DSH and Claude Code)
+
+This project is worked from **two harnesses**. The contract is
+[`docs/CROSS-TOOL.md`](docs/CROSS-TOOL.md); it is binding in both.
+
+- **Start:** read `HANDOFF.md`, run `node scripts/cos.mjs status --one-line`, and
+  reconcile against the remote, the worktrees and the gate lock before dispatching.
+- **One gate:** `bash scripts/gate.sh`. It appends one JSON line per run to
+  `.cos/journal.jsonl`, with `runtime=dsh|claude-code`.
+- **Procedures:** `.claude/commands/*.md` — `/name` in Claude Code,
+  `node scripts/cos.mjs run <name>` in DSH.
+- **Roles:** `.claude/agents/*.md` — native subagents in Claude Code,
+  `node scripts/cos.mjs dispatch <name>` in DSH.
+- **Stop:** run the gate, overwrite `HANDOFF.md`, commit it with the landing.
+- **Harness mechanics stay separate.** This file is the shared law. DSH's goal and
+  subagent rules, and Claude Code's permissions and Task rules, live in each
+  harness's own docs — never in this file.
+
 ## Binding engineering rules
 
 1. **No silent fallbacks.** When data, parsing or a step fails, propagate a LOUD

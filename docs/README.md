@@ -35,6 +35,7 @@ behaviour is the test.
 | --- | --- |
 | [`GATE.md`](GATE.md) | The one gate command: two tiers, the atomic lock, the exit-code vocabulary, and the rules around it. |
 | [`BRIEF.md`](BRIEF.md) | The writer brief template, and the dispatcher's pre-send checklist. |
+| [`CROSS-TOOL.md`](CROSS-TOOL.md) | The contract that lets a session start in DSH and continue in Claude Code: the shared files, the handoff protocol, the designation prompt, and what is deliberately not shared. |
 
 ## Field notes
 
@@ -45,8 +46,10 @@ behaviour is the test.
 ## The day-1 files that are not documents
 
 The copy-ready **non-document** files live in [`../scaffold/`](../scaffold/README.md):
-the project-rules template (`AGENTS.md.template`) and the two scripts that implement
-[`GATE.md`](GATE.md) and the board's reconciler.
+the project-rules template (`AGENTS.md.template`), the scripts that implement
+[`GATE.md`](GATE.md) and the board's reconciler, and the cross-tool files —
+`.claude/commands/`, `.claude/agents/`, `.cos/hooks/`, `HANDOFF.md.template` and
+`scripts/cos.mjs`.
 
 ## If a project already has equivalents, they win
 

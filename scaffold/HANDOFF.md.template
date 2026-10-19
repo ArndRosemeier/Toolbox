@@ -1,0 +1,32 @@
+# Handoff — <PROJECT>
+
+<!-- One screen, overwritten in place. The next session — in DSH or Claude Code —
+     reads this after AGENTS.md and docs/CROSS-TOOL.md, and must be able to act. -->
+
+- **by:** `<harness>/<session-id>`
+- **at:** `<ISO-8601>`
+- **branch / worktree:** `<branch>` · `<absolute worktree path>`
+- **last verified:** `<sha>` · gate `<0|1|2|9>` · `<counts / peak>`
+
+## Done
+
+- <one line per landed change since the last handoff>
+
+## In flight
+
+- <role · branch · worktree · what it owns · what it needs>
+
+## Next action (one)
+
+<The single next step. Name the role (writer / reviewer / probe), the worktree, and
+the first file to read. "Continue the work" is not a next action.>
+
+## Open questions for the owner
+
+- <only decisions that are genuinely the owner's; otherwise decide and record>
+
+## Read first
+
+- `AGENTS.md`
+- `docs/CROSS-TOOL.md`
+- `<the two files that carry this slice>`

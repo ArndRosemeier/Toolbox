@@ -44,6 +44,59 @@ STALE_MIN="${GATE_STALE_MIN:-30}"
 TESTS="${GATE_TESTS:-1}"
 PLAN_ONLY="${GATE_PLAN_ONLY:-0}"
 
+# --- the journal --------------------------------------------------------------
+# Append-only, one JSON line per run. It lives in the GIT COMMON DIR, so a gate run
+# from any worktree writes the SAME journal — a per-worktree file would give every
+# writer a private history and a board that lies.
+# `runtime=` is how the cross-tool stats separate DSH runs from Claude Code runs.
+COS_JOURNAL="${COS_JOURNAL:-$REPO_ROOT/.cos/journal.jsonl}"
+SHA="$(git rev-parse HEAD 2>/dev/null || true)"
+BRANCH="$(git rev-parse --abbrev-ref HEAD 2>/dev/null || true)"
+if [ -n "${COS_RUNTIME:-}" ]; then
+  RUNTIME="$COS_RUNTIME"
+elif [ -n "${CLAUDECODE:-}${CLAUDE_SESSION_ID:-}" ]; then
+  RUNTIME="claude-code"
+elif [ -n "${DSH_SESSION_ID:-}" ]; then
+  RUNTIME="dsh"
+else
+  RUNTIME="unknown"
+fi
+# The SESSION follows the runtime, never a parent shell. A Claude Code session
+# launched from a DSH shell inherits DSH_SESSION_ID; taking it would file Claude
+# Code's run under the DSH parent in the shared journal.
+if [ -n "${COS_SESSION:-}" ]; then
+  SESSION="$COS_SESSION"
+elif [ "$RUNTIME" = "claude-code" ]; then
+  SESSION="${CLAUDE_SESSION_ID:-}"
+elif [ "$RUNTIME" = "dsh" ]; then
+  SESSION="$DSH_SESSION_ID"
+else
+  SESSION=""
+fi
+LOCK_STATE="none"
+JOURNAL_ENABLED=1
+START_SECONDS=$SECONDS
+
+json_escape() { printf '%s' "$1" | sed -e 's/\\/\\\\/g' -e 's/"/\\"/g'; }
+
+journal_write() {
+  [ "$JOURNAL_ENABLED" = "1" ] || return 0
+  local code="$1" duration=$((SECONDS - START_SECONDS))
+  mkdir -p "$(dirname "$COS_JOURNAL")" 2>/dev/null || return 0
+  printf '{"ts":"%s","event":"gate","runtime":"%s","session":"%s","tier":"%s","exit":%s,"sha":"%s","branch":"%s","repo":"%s","log":"%s","lock":"%s","duration_s":%s}\n' \
+    "$(date -u +%FT%TZ)" \
+    "$(json_escape "$RUNTIME")" \
+    "$(json_escape "$SESSION")" \
+    "$(json_escape "$TIER")" \
+    "$code" \
+    "$(json_escape "$SHA")" \
+    "$(json_escape "$BRANCH")" \
+    "$(json_escape "$REPO_ROOT")" \
+    "$(json_escape "$LOG")" \
+    "$(json_escape "$LOCK_STATE")" \
+    "$duration" >> "$COS_JOURNAL" 2>/dev/null || true
+}
+
 LOG="$LOG_DIR/gate.log"
 LOCKED=0
 if [ "$TESTS" = "0" ]; then TIER="cheap"; else TIER="full"; fi
@@ -56,6 +109,7 @@ echo "log:   $LOG"
 
 if [ "$PLAN_ONLY" = "1" ]; then
   echo "PLAN ONLY — nothing was run."
+  JOURNAL_ENABLED=0
   exit 2
 fi
 
@@ -63,7 +117,15 @@ mkdir -p "$LOG_DIR"
 : > "$LOG"
 
 release_lock() { if [ "$LOCKED" = "1" ]; then rm -rf "$LOCK_DIR"; fi; }
-trap release_lock EXIT INT TERM
+
+on_exit() {
+  local code=$?
+  trap - EXIT INT TERM
+  release_lock
+  journal_write "$code"
+  exit "$code"
+}
+trap on_exit EXIT INT TERM
 
 write_owner() {
   printf 'pid=%s\nstarted=%s\ntier=%s\nrepo=%s\n' \
@@ -74,10 +136,11 @@ write_owner() {
 # run alongside an expensive one.
 if [ "$TESTS" != "0" ]; then
   if mkdir "$LOCK_DIR" 2>/dev/null; then
-    write_owner; LOCKED=1
+    write_owner; LOCKED=1; LOCK_STATE="acquired"
   else
     OWNER_PID="$(sed -n 's/^pid=//p' "$LOCK_DIR/owner" 2>/dev/null)"
     if [ -n "$OWNER_PID" ] && kill -0 "$OWNER_PID" 2>/dev/null; then
+      LOCK_STATE="refused"
       echo "REFUSED — the gate is already running (pid $OWNER_PID). This run is VOID."
       echo "A refusal is the lock WORKING: not a failure, not evidence. Exit 9."
       exit 9
@@ -85,9 +148,10 @@ if [ "$TESTS" != "0" ]; then
     if [ -n "$(find "$LOCK_DIR" -maxdepth 0 -mmin +"$STALE_MIN" 2>/dev/null)" ]; then
       echo "STALE lock (no live owner, older than ${STALE_MIN}m) — removing it and saying so."
       rm -rf "$LOCK_DIR"
-      if mkdir "$LOCK_DIR" 2>/dev/null; then write_owner; LOCKED=1; fi
+      if mkdir "$LOCK_DIR" 2>/dev/null; then write_owner; LOCKED=1; LOCK_STATE="acquired"; fi
     fi
     if [ "$LOCKED" != "1" ]; then
+      LOCK_STATE="refused"
       echo "REFUSED — lock held (pid ${OWNER_PID:-unknown}), not yet stale. VOID. Exit 9."
       exit 9
     fi
