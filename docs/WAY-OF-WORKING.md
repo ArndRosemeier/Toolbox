@@ -280,7 +280,19 @@ writer's word is a claim; the following is the check:
      copy".
 4. **The docs were amended in the same commit** (ledger row, seam index, testing doc).
 5. **Retire**: delete the session, remove the worktree, delete the branch.
-6. **A recovered or silent writer's branch is verified as a FRESH landing** — a dead
+6. **The artifact the owner touches is the last check, not the report.** A local gate and a
+   content check on the served HTML both passed on two published pages that were dead: one
+   built with root-absolute asset URLs under a subpath, one missing an audio manifest. Load
+   the deployed URL, click, read the console, compare two real-time frames, and let the
+   publisher fail closed with a distinct exit code. **Verification tooling must never write
+   the served folder** — one writer per published artifact.
+7. **Measure the thing you ship.** A budget test over a fixture, or a look gate on a staging
+   camera, can pass forever while the product regresses. Every proof names the artifact, mode
+  and pose it measures; where possible the acceptance runs the real scene/camera code.
+8. **Re-derive your own numbers.** A recorded metric is prose about state. Before quoting one,
+   re-run it on the current tree — an independent audit found an attribution bug that had
+   already made a recorded batch report wrong.
+9. **A recovered or silent writer's branch is verified as a FRESH landing** — a dead
    writer's commit has never been gated by a live report.
 
 Also: **fetch and fast-forward before verifying.** A verification run against a stale

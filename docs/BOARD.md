@@ -58,7 +58,19 @@ retired_branch=<a-branch-that-is-gone>   <!-- the ONLY form parsed as a retireme
 RECOVERY | repo=<absolute path> | remote=<url> | branch=<main> | gate=bash scripts/gate.sh
 ```
 
-### Record format — one worked example
+#### Evidence levels
+
+A `LANDED` line states **how far** it was verified, in one of three words:
+
+- **VERIFIED-DEPLOYED** — the owner-facing artifact was loaded and used (see `GATE.md`,
+  "The deployment tier"). Required for anything user-visible.
+- **VERIFIED-LOCAL** — gate + the dispatcher's own injections, on the integrated tree. Enough
+  for core, tooling and docs.
+- **PENDING-OWNER** — taste, audio, real-hardware rates, or a platform not exercised.
+
+"Done" without one of these is a claim, not a record.
+
+## Record format — one worked example
 
 ```
 LANDED | row=7 | sha=<40-hex> | verify=MY OWN: cheap tier green (exit 2) + full gate

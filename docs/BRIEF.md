@@ -70,6 +70,30 @@ rather than implementing it.
 
 ---
 
+## Small slices: the six-line brief
+
+The template above is for cross-cutting work. For a small, isolated change, six lines are
+enough and the ceremony is not the point — **the unexamined assumption is**:
+
+```text
+INTENT: what observable outcome should change?
+AUTHORITATIVE DATA: which types/fields own this fact? what do IDs and indexes mean?
+ONE SEAM: where does this already live? (search every mode/caller)
+COPIES: n→1 — … OR COPIES: 1 — checked (grepped: …)
+PROOF: one invariant + one failure/edge case, and how it is watched red
+MEASURES: which artifact, mode and pose does the proof actually measure?
+```
+
+**`MEASURES:` exists because a test can measure the wrong thing and pass forever** — a
+budget test over a demo fixture, a look gate on a staging camera, a smoke test against the
+dev server. Name the artifact the owner will touch. Where the code allows, wire the
+acceptance to the real scene/camera so it cannot be declared around.
+
+## Report line: NOT VERIFIED
+
+A landing report ends with what it did **not** verify — audio by ear, real-GPU frame rate,
+another platform, long soak, human feel. Those are not failures; an unlisted gap is.
+
 ## Dispatcher's checklist before sending
 
 - [ ] The intent is stated, not just the literal ask.
@@ -79,4 +103,6 @@ rather than implementing it.
 - [ ] Out-of-scope items are named.
 - [ ] Pins are phrased as statements, not as "test the feature".
 - [ ] The `COPIES:` line is required in the report.
+- [ ] `MEASURES:` names the artifact/mode/pose the proof runs against.
+- [ ] The report ends with `NOT VERIFIED:` — the gaps, named.
 - [ ] The BLOCKED clause is present, including "the brief may be wrong".

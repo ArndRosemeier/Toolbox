@@ -84,6 +84,29 @@ clear it; wait and retry.
    everything is pushed, so a "docs-only" skip can silently become a full run —
    decide the tier from what **changed**.
 
+## The deployment tier (when the work is user-visible)
+
+Shipping bytes is a **third kind of evidence**, and the two tiers above do not produce it.
+A build that passes typecheck and the suite can still be a dead page — observed twice in one
+day: a build whose asset URLs were root-absolute and 404'd under a subpath, and a bundle whose
+audio manifest was never copied into the published output. Both had a green local gate, a
+green content check on the served HTML, and a careful report.
+
+So if a slice changes something the owner can open, **the publisher must rehearse the
+deployed artifact and fail closed**:
+
+1. Load the **published URL** in a real browser (not the dev server, not a local preview).
+2. Collect every console error, uncaught exception and HTTP >= 400 while it boots.
+3. Click the new control(s); confirm the expected surface appears.
+4. For animated surfaces, compare two real-time frames and require them to differ.
+5. Check the assets the page asks for — the entry script, and any manifest/clip/texture it
+   fetches — return 200 over the public URL.
+6. Exit with a **distinct code** when the bytes are live but the page fails, so "published"
+   and "working" can never be confused. `publish.sh` is the one writer of the served folder;
+   gate and screenshot tools build into scratch.
+
+A content check proves the bytes are present. Only a load proves the page works.
+
 ## What a gate result must carry into the record
 
 The summed counts, the peak, and the exit code — quoted, not paraphrased. A gate
