@@ -70,6 +70,14 @@ rather than implementing it.
 
 ---
 
+## Stop at the brief
+
+Finish what the brief names, then **report and stop**. A writer that notices something else
+worth doing writes it in `NEXT ACTION` and does not build it. Self-directed slices have
+landed here: they were good work, and they still cost the owner a decision he was never
+asked for, shipped without acceptance criteria, and made the record describe work nobody
+commissioned. The dispatcher owns scope; the writer owns the seam.
+
 ## Small slices: the six-line brief
 
 The template above is for cross-cutting work. For a small, isolated change, six lines are
