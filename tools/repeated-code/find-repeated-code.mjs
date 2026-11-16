@@ -36,6 +36,7 @@ import {
   tokenize,
   shape,
   extractFunctions,
+  languageOf,
   listSourceFiles,
   resolveExtensions,
 } from '../duplicate-candidates/find-duplicate-candidates.mjs';
@@ -81,6 +82,25 @@ export const KEPT_WORDS = new Set([
   'window', 'document', 'globalThis',
 ]);
 
+/** Rust: keywords, primitive types and prelude names, kept like KEPT_WORDS. */
+export const RUST_KEPT_WORDS = new Set([
+  'as', 'break', 'const', 'continue', 'crate', 'else', 'enum', 'fn', 'for', 'if',
+  'impl', 'in', 'let', 'loop', 'match', 'mod', 'move', 'mut', 'pub', 'ref', 'return',
+  'self', 'Self', 'static', 'struct', 'super', 'trait', 'type', 'unsafe', 'use',
+  'where', 'while', 'async', 'await', 'dyn', 'true', 'false',
+  'f32', 'f64', 'i8', 'i16', 'i32', 'i64', 'i128', 'isize', 'u8', 'u16', 'u32',
+  'u64', 'u128', 'usize', 'bool', 'char', 'str',
+  'Some', 'None', 'Ok', 'Err', 'Option', 'Result', 'Vec', 'String', 'Box',
+]);
+
+/** Rust words that carry no information about WHAT a snippet does. */
+const RUST_STRUCTURAL = new Set([
+  'as', 'break', 'const', 'continue', 'crate', 'else', 'enum', 'fn', 'for', 'if',
+  'impl', 'in', 'let', 'loop', 'match', 'mod', 'move', 'mut', 'pub', 'ref', 'return',
+  'self', 'Self', 'static', 'struct', 'super', 'trait', 'type', 'unsafe', 'use',
+  'where', 'while', 'async', 'await', 'dyn', 'true', 'false',
+]);
+
 /** Language words carry no information about WHAT a snippet does: never count them as names. */
 const STRUCTURAL = new Set([
   'break', 'case', 'catch', 'class', 'const', 'continue', 'default', 'delete', 'do',
@@ -96,9 +116,17 @@ const STRUCTURAL = new Set([
  * kept, every other identifier -> ID. Returns the normalised strings and, per
  * token, the kept NAME it carries (or null) for the specificity score.
  *
+ * Rust (`lang = 'rust'`) also keeps a path segment on either side of `::`
+ * (`Place::new`, `Key::Space`): those name a type or an item, like a property.
+ *
  * @param {{v:string, kind:string}[]} tokens
+ * @param {'js'|'rust'} [lang]
  */
-export function idiomShape(tokens) {
+export function idiomShape(tokens, lang = 'js') {
+  const rust = lang === 'rust';
+  const kept = rust ? RUST_KEPT_WORDS : KEPT_WORDS;
+  const structural = rust ? RUST_STRUCTURAL : STRUCTURAL;
+  const isPath = (i) => rust && i >= 0 && i + 1 < tokens.length && tokens[i].v === ':' && tokens[i + 1].v === ':';
   const norm = new Array(tokens.length);
   const names = new Array(tokens.length);
   for (let i = 0; i < tokens.length; i += 1) {
@@ -108,11 +136,13 @@ export function idiomShape(tokens) {
     if (t.kind !== 'id') { norm[i] = t.v; continue; }
     const prev = i > 0 ? tokens[i - 1].v : '';
     if (prev === '.') { norm[i] = t.v; names[i] = `.${t.v}`; continue; }
-    if (KEPT_WORDS.has(t.v)) {
+    if (kept.has(t.v)) {
       norm[i] = t.v;
-      if (!STRUCTURAL.has(t.v)) names[i] = t.v;
+      if (!structural.has(t.v)) names[i] = t.v;
       continue;
     }
+    if (isPath(i - 2)) { norm[i] = t.v; names[i] = `::${t.v}`; continue; }
+    if (isPath(i + 1)) { norm[i] = t.v; names[i] = `${t.v}::`; continue; }
     norm[i] = 'ID';
   }
   return { norm, names };
@@ -281,9 +311,9 @@ export function findIdioms(sources, opts = {}) {
   const idOf = (s) => { let v = vocab.get(s); if (v === undefined) { v = vocab.size; vocab.set(s, v); } return v; };
   const docs = [];
   const df = new Map(); // kept name -> number of files containing it
-  for (const { file, source } of sources) {
-    const tokens = tokenize(maskCode(source));
-    const { norm, names } = idiomShape(tokens);
+  for (const { file, source, lang = languageOf(file) } of sources) {
+    const tokens = tokenize(maskCode(source, lang));
+    const { norm, names } = idiomShape(tokens, lang);
     const ids = Int32Array.from(norm, idOf);
     for (const n of new Set(names.filter(Boolean))) df.set(n, (df.get(n) ?? 0) + 1);
     docs.push({ file, source, tokens, ids, names });
@@ -391,7 +421,7 @@ export function scan(rootDir, opts = {}) {
     let source;
     try { source = fs.readFileSync(file, 'utf8'); } catch (err) { skipped.push({ file: display(file), reason: `read: ${err.code || err.message}` }); continue; }
     try {
-      for (const fn of extractFunctions(source)) functions.push({ name: fn.name, file: display(file), line: fn.line, kind: fn.kind, size: fn.tokens.length, endLine: fn.tokens.length ? fn.tokens[fn.tokens.length - 1].line : fn.line, tokens: fn.tokens });
+      for (const fn of extractFunctions(source, languageOf(file))) functions.push({ name: fn.name, file: display(file), line: fn.line, kind: fn.kind, size: fn.tokens.length, endLine: fn.tokens.length ? fn.tokens[fn.tokens.length - 1].line : fn.line, tokens: fn.tokens });
       sources.push({ file: display(file), source });
     } catch (err) {
       skipped.push({ file: display(file), reason: `parse: ${err.message}` });

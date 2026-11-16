@@ -16,6 +16,8 @@ import {
   maskCode,
   tokenize,
   extractFunctions,
+  languageOf,
+  scanTree,
   groupCandidates,
   normaliseName,
   splitNameTokens,
@@ -677,9 +679,9 @@ test('portability: no source-project specifics in the tool, its docs or its outp
 // Source languages (extensions)
 // ---------------------------------------------------------------------------
 
-test('extensions: default set covers JS/TS/JSX/TSX; --ext replaces and normalises', () => {
+test('extensions: default set covers JS/TS/JSX/TSX and Rust; --ext replaces and normalises', () => {
   assert.deepEqual(DEFAULT_EXTENSIONS, [
-    '.ts', '.tsx', '.mts', '.cts', '.js', '.jsx', '.mjs', '.cjs',
+    '.ts', '.tsx', '.mts', '.cts', '.js', '.jsx', '.mjs', '.cjs', '.rs',
   ]);
   assert.deepEqual(resolveExtensions({}), DEFAULT_EXTENSIONS);
 
@@ -853,5 +855,68 @@ test('end-to-end: scans .tsx/.jsx, collects property arrows, invents nothing fro
     assert.ok(!res.stdout.includes('onCancel'), 'a type signature was collected as a function');
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// Rust
+// ---------------------------------------------------------------------------
+
+test('rust: languageOf reads .rs as Rust and everything else as JS/TS', () => {
+  assert.equal(languageOf('src/a.rs'), 'rust');
+  assert.equal(languageOf('src/A.RS'), 'rust');
+  assert.equal(languageOf('src/a.ts'), 'js');
+});
+
+test('rust: masking handles nested comments, raw strings, chars and lifetimes', () => {
+  const src = [
+    "/* outer /* inner fn fake_a() {} */ still fn fake_b() {} */",
+    'let s = r#"fn fake_c() { "quoted" }"#;',
+    "let c = '{'; let e = '\\'';",
+    "fn keep<'a>(x: &'a str) -> &'a str { x }",
+  ].join('\n');
+  const masked = maskCode(src, 'rust');
+  assert.equal(masked.split('\n').length, 4, 'newlines are kept');
+  assert.ok(!masked.includes('fake'), 'comment and string text is masked');
+  assert.ok(!masked.slice(masked.indexOf('let c')).split('\n')[0].includes('{'), 'a char literal brace is masked');
+  assert.deepEqual(extractFunctions(src, 'rust').map((f) => f.name), ['keep']);
+});
+
+test('rust: fn items, methods, generics, return types and where clauses are found; signatures and fn types are not', () => {
+  const src = `
+pub fn free(a: f32) -> f32 { a * 2.0 }
+impl Thing {
+    pub(crate) fn method(&self, v: [f32; 3]) -> Option<[f32; 3]> { Some(v) }
+    fn generic<F: Fn(u8) -> u8>(f: F) -> u8 where F: Copy { f(1) }
+}
+trait T {
+    fn required(&self);
+    fn provided(&self) -> u32 { 7 }
+}
+fn takes_pointer(f: fn(f32) -> f32) -> f32 {
+    fn nested() -> f32 { 1.0 }
+    f(nested())
+}
+`;
+  const found = extractFunctions(src, 'rust');
+  assert.deepEqual(found.map((f) => f.name), ['free', 'method', 'generic', 'provided', 'takes_pointer', 'nested']);
+  assert.ok(found.every((f) => f.kind === 'fn'));
+  assert.deepEqual(found[0].tokens.map((t) => t.v), ['a', '*', '2.0']);
+  assert.equal(found[0].line, 2);
+});
+
+test('rust: the scanner reads .rs files as Rust and skips a CACHEDIR.TAG build directory', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'dup-rust-'));
+  try {
+    fs.mkdirSync(path.join(root, 'src'));
+    fs.mkdirSync(path.join(root, 'target'));
+    fs.writeFileSync(path.join(root, 'src', 'a.rs'), 'fn smooth(t: f32) -> f32 { t * t * (3.0 - 2.0 * t) }\n');
+    fs.writeFileSync(path.join(root, 'src', 'b.rs'), 'fn smooth(x: f32) -> f32 { x * x * (3.0 - 2.0 * x) }\n');
+    fs.writeFileSync(path.join(root, 'target', 'CACHEDIR.TAG'), 'Signature: 8a477f597d28d172789f06886806bc55\n');
+    fs.writeFileSync(path.join(root, 'target', 'gen.rs'), 'fn smooth(x: f32) -> f32 { x }\n');
+    const r = scanTree(root, { displayBase: root });
+    assert.deepEqual(r.functions.map((f) => `${f.file}:${f.name}`), ['src/a.rs:smooth', 'src/b.rs:smooth']);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
   }
 });

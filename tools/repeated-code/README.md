@@ -39,7 +39,7 @@ node tools/repeated-code/find-repeated-code.mjs --min-files 4 --window 20 --max 
 | --- | --- | --- |
 | `--src DIR` | `<repo>/src` | source root (same walker as `duplicate-candidates`: no symlinks, skips `node_modules`, `dist*`, `*.d.ts`, tests) |
 | `--report FILE` | `reports/repeated-code.md` | markdown report |
-| `--ext a,b,c` | `.ts,.tsx,.mts,.cts,.js,.jsx,.mjs,.cjs` | extensions to scan |
+| `--ext a,b,c` | `.ts,.tsx,.mts,.cts,.js,.jsx,.mjs,.cjs,.rs` | extensions to scan (`.rs` is read as Rust: keywords and `Type::item` path segments are kept like property names) |
 | `--window N` | 16 | idiom window in tokens. Smaller finds shorter idioms and more noise |
 | `--min-files N` | 3 | an idiom must recur in N different files |
 | `--min-info BITS` | 6 | idiom specificity floor; `0` lists everything |

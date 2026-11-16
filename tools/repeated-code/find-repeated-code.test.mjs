@@ -39,6 +39,12 @@ test('idiomShape keeps property names and globals, erases locals and numbers', (
   assert.deepEqual(names.filter(Boolean), ['Math', '.hypot', '.x', '.x']);
 });
 
+test('idiomShape (Rust) keeps keywords and path segments, erases locals', () => {
+  const { norm, names } = idiomShape(tokenize(maskCode('let q = Quat::from_mat3(&m);', 'rust')), 'rust');
+  assert.deepEqual(norm, ['let', 'ID', '=', 'Quat', ':', ':', 'from_mat3', '(', '&', 'ID', ')', ';']);
+  assert.deepEqual(names.filter(Boolean), ['Quat::', '::from_mat3']);
+});
+
 test('fnv is a stable 32-bit hash', () => {
   assert.equal(fnv(''), 0x811c9dc5);
   assert.equal(fnv('abc'), fnv('abc'));

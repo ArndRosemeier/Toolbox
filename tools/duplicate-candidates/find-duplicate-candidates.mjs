@@ -66,6 +66,8 @@ export const DEFAULT_SIZE_RATIO = 0.5;
  *     getInstance — same singleton/UI shape repeated by convention.
  *   - language & runtime callbacks: toString, valueOf, main, handler, handleEvent
  *     — prescribed by the language, the entry point, or the event system.
+ *   - Rust conventions: new, default, fmt, from, drop, clone, eq, hash, deref,
+ *     deref_mut — a constructor or standard-trait method on every type.
  *
  * A pair is ignored only when ALL of its names (normalised) are listed, so a
  * near-match like `open` / `openDocument` is kept: only the unrelated half is
@@ -95,6 +97,17 @@ export const DEFAULT_IGNORED_NAMES = [
   'main',
   'handler',
   'handleEvent',
+  // Rust: constructors and standard-trait methods every type implements by convention
+  'new',
+  'default',
+  'fmt',
+  'from',
+  'drop',
+  'clone',
+  'eq',
+  'hash',
+  'deref',
+  'deref_mut',
 ];
 
 
@@ -111,7 +124,8 @@ export const DEFAULT_IGNORED_NAMES = [
  * @param {string} code
  * @returns {string}
  */
-export function maskCode(code) {
+export function maskCode(code, lang = 'js') {
+  if (lang === 'rust') return maskRust(code);
   const n = code.length;
   let out = '';
   let i = 0;
@@ -215,6 +229,139 @@ export function maskCode(code) {
         i += 1;
       }
       continue;
+    }
+
+    out += c;
+    i += 1;
+  }
+
+  return out;
+}
+
+// ---------------------------------------------------------------------------
+// Rust masking
+// ---------------------------------------------------------------------------
+
+/**
+ * The language a file is read as, from its extension: `rust` for `.rs`, `js`
+ * (JavaScript / TypeScript) for everything else.
+ */
+export function languageOf(file) {
+  return String(file).toLowerCase().endsWith('.rs') ? 'rust' : 'js';
+}
+
+/**
+ * maskCode for Rust. Same contract (literals -> `0`, comments blanked, newlines
+ * kept), with Rust's lexical rules: block comments nest, raw strings
+ * (`r"…"`, `r#"…"#`, `br#"…"#`) have no escapes, and a `'` is a char literal
+ * (`'a'`, `'\n'`) or a lifetime / loop label (`'a`, `'outer:`), which is kept as
+ * code. There are no regex or template literals.
+ *
+ * @param {string} code
+ * @returns {string}
+ */
+export function maskRust(code) {
+  const n = code.length;
+  let out = '';
+  let i = 0;
+  const blank = (ch) => (ch === '\n' ? '\n' : ch === '\r' ? '\r' : ' ');
+  const isIdent = (ch) => ch !== undefined && /[A-Za-z0-9_]/.test(ch);
+
+  while (i < n) {
+    const c = code[i];
+    const c2 = code[i + 1];
+
+    if (c === '/' && c2 === '/') {
+      while (i < n && code[i] !== '\n') {
+        out += ' ';
+        i += 1;
+      }
+      continue;
+    }
+
+    if (c === '/' && c2 === '*') {
+      let depth = 0;
+      while (i < n) {
+        if (code[i] === '/' && code[i + 1] === '*') {
+          depth += 1;
+          out += '  ';
+          i += 2;
+          continue;
+        }
+        if (code[i] === '*' && code[i + 1] === '/') {
+          depth -= 1;
+          out += '  ';
+          i += 2;
+          if (depth === 0) break;
+          continue;
+        }
+        out += blank(code[i]);
+        i += 1;
+      }
+      continue;
+    }
+
+    // raw string: r"…", r#"…"#, br##"…"##. The `r` must start a token.
+    if ((c === 'r' || (c === 'b' && c2 === 'r')) && !isIdent(out[out.length - 1])) {
+      let k = c === 'b' ? i + 2 : i + 1;
+      let hashes = 0;
+      while (code[k] === '#') {
+        hashes += 1;
+        k += 1;
+      }
+      if (code[k] === '"') {
+        const close = '"' + '#'.repeat(hashes);
+        const end = code.indexOf(close, k + 1);
+        const stop = end < 0 ? n : end + close.length;
+        out += '0';
+        for (let j = i + 1; j < stop; j += 1) out += blank(code[j]);
+        i = stop;
+        continue;
+      }
+    }
+
+    if (c === '"') {
+      out += '0';
+      i += 1;
+      while (i < n) {
+        if (code[i] === '\\') {
+          out += blank(code[i]);
+          i += 1;
+          if (i < n) {
+            out += blank(code[i]);
+            i += 1;
+          }
+          continue;
+        }
+        if (code[i] === '"') {
+          out += ' ';
+          i += 1;
+          break;
+        }
+        out += blank(code[i]);
+        i += 1;
+      }
+      continue;
+    }
+
+    if (c === "'") {
+      // char literal: an escape, or one character (a surrogate pair is two
+      // UTF-16 units) followed by the closing quote. Anything else is a lifetime.
+      let end = -1;
+      if (c2 === '\\') {
+        const close = code.indexOf("'", i + 3);
+        if (close > 0 && close - i <= 12) end = close;
+      } else if (code[i + 2] === "'" && c2 !== "'") {
+        end = i + 2;
+      } else if (code[i + 3] === "'" && /[\uD800-\uDBFF]/.test(c2 || '')) {
+        end = i + 3;
+      }
+      if (end > 0) {
+        out += '0';
+        for (let j = i + 1; j <= end; j += 1) out += blank(code[j]);
+        i = end + 1;
+        continue;
+      }
     }
 
     out += c;
@@ -810,7 +957,8 @@ function isBareTypeSignature(body) {
  * @param {string} source
  * @returns {{name: string, line: number, kind: string, tokens: object[]}[]}
  */
-export function extractFunctions(source) {
+export function extractFunctions(source, lang = 'js') {
+  if (lang === 'rust') return extractRustFunctions(source);
   const tokens = tokenize(maskCode(source));
   const found = [];
   const push = (name, line, kind, body) => {
@@ -893,6 +1041,69 @@ export function extractFunctions(source) {
   return found;
 }
 
+/**
+ * Extract every `fn` item from Rust source: free functions, methods in `impl`
+ * blocks, trait methods with a default body and nested functions. A trait method
+ * without a body (`fn f(&self);`) and a function-pointer type (`fn(f32) -> f32`,
+ * no name) are not functions. Closures are not collected (they have no name); the
+ * repeated-code tool sees them as idioms.
+ *
+ * @param {string} source
+ * @returns {{name: string, line: number, kind: string, tokens: object[]}[]}
+ */
+export function extractRustFunctions(source) {
+  const tokens = tokenize(maskCode(source, 'rust'));
+  const found = [];
+  for (let i = 0; i < tokens.length; i += 1) {
+    if (tokens[i].v !== 'fn') continue;
+    const nameTok = tokens[i + 1];
+    if (!nameTok || nameTok.kind !== 'id') continue;
+    let k = i + 2;
+    if (tokens[k] && tokens[k].v === '<') {
+      const m = findRustAngleMatch(tokens, k);
+      if (m < 0) continue;
+      k = m + 1;
+    }
+    if (!tokens[k] || tokens[k].v !== '(') continue;
+    const close = findMatch(tokens, k);
+    if (close < 0) continue;
+    // Return type and `where` clause up to the body `{`, or `;` for no body.
+    // `[f32; 3]` and `Fn(u8) -> u8` keep their `;` / `(` inside brackets.
+    let depth = 0;
+    let brace = -1;
+    for (let j = close + 1; j < tokens.length; j += 1) {
+      const v = tokens[j].v;
+      if (v === '(' || v === '[') depth += 1;
+      else if (v === ')' || v === ']') depth -= 1;
+      else if (depth === 0 && v === ';') break;
+      else if (depth === 0 && v === '{') {
+        brace = j;
+        break;
+      }
+      if (depth < 0) break;
+    }
+    const body = bodySlice(tokens, brace);
+    if (body) found.push({ name: nameTok.v, line: nameTok.line, kind: 'fn', tokens: body });
+  }
+  return found;
+}
+
+/** Index of the `>` closing Rust generics opened at `start` (an `->` inside does not count), or -1. */
+function findRustAngleMatch(tokens, start) {
+  let depth = 0;
+  for (let j = start; j < tokens.length; j += 1) {
+    const v = tokens[j].v;
+    if (v === '<') depth += 1;
+    else if (v === '>' && !(tokens[j - 1] && tokens[j - 1].v === '-')) {
+      depth -= 1;
+      if (depth === 0) return j;
+    } else if (v === ';' || v === '{' || v === '}') {
+      return -1;
+    }
+  }
+  return -1;
+}
+
 /** Find the assignment `=` at depth 0, skipping an optional type annotation. */
 function findTopLevelAssign(tokens, from) {
   let depth = 0;
@@ -933,10 +1144,14 @@ const SKIP_DIR_PREFIXES = ['node_modules', 'dist'];
  * `.vue` / `.svelte` stay OUT: they are single-file components where markup
  * dominates and a `<script>` block may be absent, so the tokenizer would ingest the
  * template as code. Those need a real extractor — see tools/README.md.
+ *
+ * `.rs` is read as Rust (`languageOf`): its own masking (nested comments, raw
+ * strings, lifetimes) and `fn` items as the declarations.
  */
 export const DEFAULT_EXTENSIONS = [
   '.ts', '.tsx', '.mts', '.cts',
   '.js', '.jsx', '.mjs', '.cjs',
+  '.rs',
 ];
 
 /** Normalise `--ext` values: trim, lowercase, and guarantee a leading dot. */
@@ -989,7 +1204,7 @@ export function scanTree(rootDir, opts = {}) {
       continue;
     }
     try {
-      for (const fn of extractFunctions(source)) {
+      for (const fn of extractFunctions(source, languageOf(file))) {
         functions.push({
           name: fn.name,
           file: display(file),
@@ -1047,6 +1262,8 @@ export function listSourceFiles(rootDir, opts = {}) {
       const full = path.join(dir, entry.name);
       if (entry.isDirectory()) {
         if (SKIP_DIR_PREFIXES.some((p) => entry.name === p || entry.name.startsWith(p))) continue;
+        // A build cache (Cargo's `target/`, …) marks itself with CACHEDIR.TAG.
+        if (fs.existsSync(path.join(full, 'CACHEDIR.TAG'))) continue;
         walk(full);
         continue;
       }

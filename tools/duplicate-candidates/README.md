@@ -117,10 +117,14 @@ So the two are complements, not competitors:
 ## How it works
 
 1. **Scan.** Walk the source root for **`.ts`, `.tsx`, `.mts`, `.cts`, `.js`,
-   `.jsx`, `.mjs` and `.cjs`** files (`--ext a,b,c` replaces that list). Skip
+   `.jsx`, `.mjs`, `.cjs` and `.rs`** files (`--ext a,b,c` replaces that list). Skip
    `*.d.ts` and the tests/specs of every supported extension (`*.test.tsx`,
-   `*.spec.mjs`, …), plus `node_modules`, `dist*` and every symlink (nothing outside
-   the repo is followed). Comments, strings, template literals and regex literals are
+   `*.spec.mjs`, …), plus `node_modules`, `dist*`, any directory holding a
+   `CACHEDIR.TAG` (a build cache such as Cargo's `target/`) and every symlink
+   (nothing outside the repo is followed). `.rs` files are read as **Rust**: their
+   own masking (nested block comments, raw strings, char literals versus
+   lifetimes) and every `fn` item with a body as a declaration (free functions,
+   methods, default trait methods, nested functions; not closures). Comments, strings, template literals and regex literals are
    masked out **before** parsing, so text inside them can never create a fake
    function. Brace depth bounds each body.
    **`.vue`/`.svelte` are not scanned** — single-file components where markup
@@ -315,8 +319,8 @@ honest about over-reporting:
 - **Heuristic parser.** Decorators or exotic syntax can defeat the brace/paren
   matcher. Such files are skipped and counted (the `skipped` number in the stats),
   never fatal — but check that count when it is non-zero.
-- **Languages.** `.ts`, `.tsx`, `.mts`, `.cts`, `.js`, `.jsx`, `.mjs` and `.cjs` are
-  scanned — widen or narrow the set with `--ext a,b,c`. **`.vue` and `.svelte` are
+- **Languages.** `.ts`, `.tsx`, `.mts`, `.cts`, `.js`, `.jsx`, `.mjs`, `.cjs` and
+  `.rs` (Rust) are scanned — widen or narrow the set with `--ext a,b,c`. **`.vue` and `.svelte` are
   not**: they are single-file components where markup dominates and the `<script>`
   block may be absent, so the tokenizer would ingest the template as code. Those need
   a real extractor, or a pre-pass that pulls out the `<script>` block.

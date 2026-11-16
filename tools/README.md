@@ -124,11 +124,12 @@ repo without reading this project's history first.
   (`packages/*/src`). The tool currently scans one root; run it per package
   (`--src packages/a/src --report reports/dup-a.md`) or extend `scanTree` with a
   list of roots. Do not silently scan `node_modules`.
-- **Generated, vendored and minified files.** The walker skips `node_modules` and
-  any `dist*` directory, but it cannot know that `src/generated/schema.ts` is
+- **Generated, vendored and minified files.** The walker skips `node_modules`, any
+  `dist*` directory and any directory holding a `CACHEDIR.TAG` (Cargo's `target/`), but it cannot know that `src/generated/schema.ts` is
   machine-written. Exclude those roots or expect inflated counts.
 - **Source languages.** The scanner takes `.ts`, `.tsx`, `.mts`, `.cts`, `.js`,
-  `.jsx`, `.mjs` and `.cjs` by default (`--ext a,b,c` replaces the list), skips
+  `.jsx`, `.mjs`, `.cjs` and `.rs` by default (`--ext a,b,c` replaces the list; `.rs`
+  is read with Rust's own lexical rules and `fn` items), skips
   `*.d.ts` and the tests/specs of each supported extension, and does **not** scan
   `.vue`/`.svelte` — single-file components where markup dominates and the
   `<script>` block may be absent, so the tokenizer would ingest the template. Those
